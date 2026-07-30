@@ -297,3 +297,203 @@ code {
   padding: 0.05rem 0.3rem;
   border-radius: 0.25rem;
 }
+
+.layout {
+  max-width: 1280px;
+}
+
+.layout.drawer-open {
+  margin-right: min(420px, 42vw);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 1000px) {
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  .layout.drawer-open {
+    margin-right: 0;
+  }
+}
+
+.panel.compact {
+  padding-bottom: 0.85rem;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.kanban {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.column {
+  min-width: 220px;
+  max-width: 260px;
+  flex: 1;
+  background: #f5f8fb;
+  border: 1px solid #dce4ec;
+  border-radius: 0.5rem;
+  padding: 0.55rem;
+}
+
+.column header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.column h3 {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.count {
+  font-size: 0.75rem;
+  background: #e2ebf2;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d5dee7;
+  border-radius: 0.45rem;
+  padding: 0.55rem 0.6rem;
+  margin-bottom: 0.45rem;
+  cursor: pointer;
+}
+
+.card:hover,
+.card.active {
+  border-color: #1f4b6e;
+}
+
+.card strong {
+  display: block;
+  font-size: 0.9rem;
+}
+
+.card p {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+}
+
+.card .move select {
+  width: 100%;
+  margin-top: 0.4rem;
+  font: inherit;
+  font-size: 0.78rem;
+  border: 1px solid #c5d0db;
+  border-radius: 0.3rem;
+  padding: 0.25rem;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  background: #f5f8fb;
+}
+
+.member-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.member-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #eef2f6;
+  font-size: 0.88rem;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(400px, 92vw);
+  height: 100vh;
+  overflow: auto;
+  background: #fff;
+  border-left: 1px solid #d5dde6;
+  padding: 1rem 1.1rem 2rem;
+  z-index: 20;
+  box-shadow: none;
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.drawer h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.drawer h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+.drawer .full,
+.drawer textarea,
+.drawer select.full {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #c5d0db;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  margin-bottom: 0.45rem;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline li {
+  border-left: 2px solid #c5d5e2;
+  padding: 0.35rem 0 0.65rem 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.timeline .when {
+  display: block;
+  font-size: 0.72rem;
+  color: #6a7a8a;
+}
+
+.timeline strong {
+  font-size: 0.8rem;
+}
+
+.timeline p {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+}

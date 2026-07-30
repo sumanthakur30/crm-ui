@@ -76,3 +76,41 @@ export interface StatusResponse {
   phase: string;
   entitlementCheckEnabled: boolean;
 }
+
+export interface Pipeline {
+  id: number;
+  code: string;
+  name: string;
+  objectType: string;
+  isDefault: boolean;
+}
+
+export interface Stage {
+  id: number;
+  pipelineId: number;
+  code: string;
+  name: string;
+  sortOrder: number;
+  probability: number;
+  won: boolean;
+  lost: boolean;
+}
+
+export interface TeamMember {
+  id: number;
+  teamId: string;
+  userId: string;
+  displayName?: string | null;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface TimelineItem {
+  kind: string;
+  id: number;
+  eventType: string;
+  summary: string;
+  actorUserId?: string | null;
+  occurredAt: string;
+  payload?: Record<string, unknown>;
+}

@@ -1,7 +1,15 @@
 import { Component, OnInit } from '@angular/core';
 import { CrmApiService } from './core/crm-api.service';
 import { TenantService } from './core/tenant.service';
-import { ImportResult, Lead, Workspace } from './models/crm.models';
+import {
+  ImportResult,
+  Lead,
+  Pipeline,
+  Stage,
+  TeamMember,
+  TimelineItem,
+  Workspace,
+} from './models/crm.models';
 
 @Component({
   selector: 'app-root',
@@ -10,6 +18,7 @@ import { ImportResult, Lead, Workspace } from './models/crm.models';
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
+  view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
   workspaceName = 'Demo Workspace';
@@ -17,8 +26,19 @@ export class AppComponent implements OnInit {
   searchQ = '';
 
   workspace: Workspace | null = null;
+  pipelines: Pipeline[] = [];
+  stages: Stage[] = [];
   leads: Lead[] = [];
   totalLeads = 0;
+  members: TeamMember[] = [];
+
+  selectedLead: Lead | null = null;
+  timeline: TimelineItem[] = [];
+  noteDraft = '';
+  assignMode: 'ROUND_ROBIN' | 'MANUAL' = 'ROUND_ROBIN';
+  manualOwner = '';
+
+  memberForm = { userId: '', displayName: '' };
 
   leadForm = {
     title: '',
@@ -46,7 +66,14 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.refreshStatus();
-    this.loadLeads();
+    this.reloadAll();
+  }
+
+  get kanbanColumns(): { stage: Stage; leads: Lead[] }[] {
+    return this.stages.map((stage) => ({
+      stage,
+      leads: this.leads.filter((l) => l.stageId === stage.id),
+    }));
   }
 
   saveTenant(): void {
@@ -54,17 +81,24 @@ export class AppComponent implements OnInit {
     this.message = `Tenant set to ${this.tenant.tenantId}`;
     this.error = '';
     this.workspace = null;
-    this.loadLeads();
+    this.selectedLead = null;
+    this.reloadAll();
   }
 
   refreshStatus(): void {
     this.api.status().subscribe({
       next: (s) => {
-        this.message = `${s.service} phase ${s.phase} (entitlement check: ${s.entitlementCheckEnabled})`;
+        this.message = `${s.service} phase ${s.phase}`;
         this.error = '';
       },
-      error: (err) => this.setError(err, 'Status check failed'),
+      error: (err) => this.setError(err, 'Status check failed — is crm-service on :8095?'),
     });
+  }
+
+  reloadAll(): void {
+    this.loadLeads();
+    this.loadMembers();
+    this.loadCurrentWorkspace();
   }
 
   bootstrapWorkspace(): void {
@@ -77,9 +111,10 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: (ws) => {
           this.workspace = ws;
-          this.message = `Workspace ready: ${ws.name} (id ${ws.id})`;
+          this.message = `Workspace ready: ${ws.name}`;
           this.error = '';
           this.busy = false;
+          this.loadPipelinesAndStages(ws.defaultPipelineId);
           this.loadLeads();
         },
         error: (err) => {
@@ -93,10 +128,37 @@ export class AppComponent implements OnInit {
     this.api.currentWorkspace().subscribe({
       next: (ws) => {
         this.workspace = ws;
-        this.message = `Current workspace: ${ws.name}`;
-        this.error = '';
+        this.loadPipelinesAndStages(ws.defaultPipelineId);
       },
-      error: (err) => this.setError(err, 'No workspace for tenant'),
+      error: () => {
+        /* no workspace yet */
+      },
+    });
+  }
+
+  loadPipelinesAndStages(defaultPipelineId?: number | null): void {
+    this.api.listPipelines().subscribe({
+      next: (pipes) => {
+        this.pipelines = pipes || [];
+        const pipelineId =
+          defaultPipelineId ||
+          this.pipelines.find((p) => p.isDefault)?.id ||
+          this.pipelines[0]?.id;
+        if (!pipelineId) {
+          this.stages = [];
+          return;
+        }
+        this.api.listStages(pipelineId).subscribe({
+          next: (stages) => {
+            this.stages = (stages || []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+          },
+          error: (err) => this.setError(err, 'Failed to load stages'),
+        });
+      },
+      error: () => {
+        this.pipelines = [];
+        this.stages = [];
+      },
     });
   }
 
@@ -106,8 +168,21 @@ export class AppComponent implements OnInit {
         this.leads = page.content || [];
         this.totalLeads = page.totalElements ?? this.leads.length;
         this.error = '';
+        if (this.selectedLead) {
+          const fresh = this.leads.find((l) => l.id === this.selectedLead!.id);
+          if (fresh) {
+            this.selectedLead = fresh;
+          }
+        }
       },
       error: (err) => this.setError(err, 'Failed to load leads'),
+    });
+  }
+
+  loadMembers(): void {
+    this.api.listMembers('DEFAULT').subscribe({
+      next: (m) => (this.members = m || []),
+      error: () => (this.members = []),
     });
   }
 
@@ -127,7 +202,7 @@ export class AppComponent implements OnInit {
         sourceCode: this.leadForm.sourceCode || null,
       })
       .subscribe({
-        next: () => {
+        next: (lead) => {
           this.busy = false;
           this.message = 'Lead created';
           this.error = '';
@@ -140,11 +215,120 @@ export class AppComponent implements OnInit {
             sourceCode: 'WEBSITE',
           };
           this.loadLeads();
+          this.openLead(lead);
         },
         error: (err) => {
           this.busy = false;
           this.setError(err, 'Create lead failed');
         },
+      });
+  }
+
+  openLead(lead: Lead): void {
+    this.selectedLead = lead;
+    this.noteDraft = '';
+    this.loadTimeline(lead.id);
+  }
+
+  closeLead(): void {
+    this.selectedLead = null;
+    this.timeline = [];
+  }
+
+  loadTimeline(leadId: number): void {
+    this.api.timeline(leadId).subscribe({
+      next: (items) => (this.timeline = items || []),
+      error: () => (this.timeline = []),
+    });
+  }
+
+  addNote(): void {
+    if (!this.selectedLead || !this.noteDraft.trim()) {
+      return;
+    }
+    this.busy = true;
+    this.api.addNote(this.selectedLead.id, this.noteDraft.trim()).subscribe({
+      next: () => {
+        this.busy = false;
+        this.noteDraft = '';
+        this.message = 'Note added';
+        this.loadTimeline(this.selectedLead!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Failed to add note');
+      },
+    });
+  }
+
+  moveLead(lead: Lead, stageId: number): void {
+    if (lead.stageId === stageId) {
+      return;
+    }
+    this.busy = true;
+    this.api.moveStage(lead.id, stageId).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.message = `Moved to stage ${stageId}`;
+        this.loadLeads();
+        if (this.selectedLead?.id === updated.id) {
+          this.openLead(updated);
+        }
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Move stage failed');
+      },
+    });
+  }
+
+  assignSelected(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const body =
+      this.assignMode === 'ROUND_ROBIN'
+        ? { mode: 'ROUND_ROBIN', teamId: 'DEFAULT' }
+        : { mode: 'MANUAL', ownerUserId: this.manualOwner, teamId: 'DEFAULT' };
+    if (this.assignMode === 'MANUAL' && !this.manualOwner.trim()) {
+      this.error = 'Enter owner user id for manual assign';
+      return;
+    }
+    this.busy = true;
+    this.api.assignLead(this.selectedLead.id, body).subscribe({
+      next: (lead) => {
+        this.busy = false;
+        this.message = `Assigned to ${lead.ownerUserId}`;
+        this.selectedLead = lead;
+        this.loadLeads();
+        this.loadTimeline(lead.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Assign failed — add team members for round-robin');
+      },
+    });
+  }
+
+  addMember(): void {
+    if (!this.memberForm.userId.trim()) {
+      this.error = 'userId required';
+      return;
+    }
+    this.api
+      .upsertMember({
+        teamId: 'DEFAULT',
+        userId: this.memberForm.userId.trim(),
+        displayName: this.memberForm.displayName || undefined,
+        active: true,
+      })
+      .subscribe({
+        next: () => {
+          this.memberForm = { userId: '', displayName: '' };
+          this.message = 'Team member saved';
+          this.loadMembers();
+        },
+        error: (err) => this.setError(err, 'Failed to save member'),
       });
   }
 
@@ -164,8 +348,7 @@ export class AppComponent implements OnInit {
       next: (result) => {
         this.busy = false;
         this.importResult = result;
-        this.message = `Import done: ${result.created} created, ${result.skipped} skipped of ${result.totalRows}`;
-        this.error = '';
+        this.message = `Import: ${result.created} created, ${result.skipped} skipped`;
         this.loadLeads();
       },
       error: (err) => {
@@ -175,10 +358,13 @@ export class AppComponent implements OnInit {
     });
   }
 
+  stageName(stageId?: number | null): string {
+    return this.stages.find((s) => s.id === stageId)?.name || String(stageId ?? '—');
+  }
+
   private setError(err: unknown, fallback: string): void {
     const e = err as { error?: { message?: string; error?: string }; message?: string; status?: number };
-    const detail =
-      e?.error?.message || e?.error?.error || e?.message || fallback;
+    const detail = e?.error?.message || e?.error?.error || e?.message || fallback;
     this.error = typeof detail === 'string' ? detail : fallback;
     if (e?.status) {
       this.error = `${this.error} (HTTP ${e.status})`;

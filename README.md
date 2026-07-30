@@ -9,7 +9,7 @@ cd D:\sugamFlow\crm-ui
 npm start
 ```
 
-Opens on **http://localhost:4400** and proxies `/api` → `http://localhost:8095`.
+Opens on **http://localhost:4500** and proxies `/api` → `http://localhost:8095`.
 
 ## Features
 
