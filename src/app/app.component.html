@@ -3,13 +3,16 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 4 — AI · Residency · SSO · Audit export</p>
+      <p class="tag">Phase 5 pilot — RETAIL · entitlements · convert · auth</p>
     </div>
   </div>
   <div class="tenant-bar">
     <label for="tenant">Tenant</label>
     <input id="tenant" [(ngModel)]="tenantDraft" name="tenant" placeholder="demo-crm" />
     <button type="button" class="btn" (click)="saveTenant()">Set</button>
+    <input [(ngModel)]="authUserDraft" name="authUser" placeholder="user id" style="max-width: 7rem" />
+    <input [(ngModel)]="authTokenDraft" name="authTok" placeholder="Bearer token (optional)" style="min-width: 10rem" />
+    <button type="button" class="btn" (click)="saveAuth()">Auth</button>
     <button type="button" class="btn ghost" (click)="refreshStatus()">Ping</button>
   </div>
 </header>
@@ -690,6 +693,7 @@
       <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
       <button type="button" class="btn" (click)="runAi('nba')">AI NBA</button>
       <button type="button" class="btn" (click)="runAi('summarize')">AI summary</button>
+      <button type="button" class="btn" (click)="findDuplicates()">Find duplicates</button>
     </div>
     <div class="row wrap">
       <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />

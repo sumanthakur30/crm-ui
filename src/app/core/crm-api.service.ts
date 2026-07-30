@@ -271,6 +271,34 @@ export class CrmApiService {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/adapters/events`);
   }
 
+  findDuplicates(leadId: number): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/leads/${leadId}/duplicates`);
+  }
+
+  mergeLeads(survivorId: number, duplicateId: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/leads/${survivorId}/merge/${duplicateId}`, {});
+  }
+
+  listAccounts(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/accounts`);
+  }
+
+  upsertAccount(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/accounts`, body);
+  }
+
+  listContacts(accountId?: number): Observable<Array<Record<string, unknown>>> {
+    let params = new HttpParams();
+    if (accountId != null) {
+      params = params.set('accountId', accountId);
+    }
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/contacts`, { params });
+  }
+
+  upsertContact(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/contacts`, body);
+  }
+
   // —— Phase 4 AI ——
   summarizeLead(leadId: number, language?: string): Observable<Record<string, unknown>> {
     let params = new HttpParams();

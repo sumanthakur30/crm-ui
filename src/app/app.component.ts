@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CrmApiService } from './core/crm-api.service';
 import { TenantService } from './core/tenant.service';
+import { AuthSessionService } from './core/auth-session.service';
 import {
   Campaign,
   ImportResult,
@@ -26,9 +27,11 @@ export class AppComponent implements OnInit {
 
   tenantDraft = '';
   workspaceName = 'Demo Workspace';
-  templateCode = 'GENERIC';
+  templateCode = 'RETAIL';
   templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
   searchQ = '';
+  authTokenDraft = '';
+  authUserDraft = '';
 
   workspace: Workspace | null = null;
   pipelines: Pipeline[] = [];
@@ -153,9 +156,12 @@ export class AppComponent implements OnInit {
 
   constructor(
     private readonly api: CrmApiService,
-    readonly tenant: TenantService
+    readonly tenant: TenantService,
+    readonly auth: AuthSessionService
   ) {
     this.tenantDraft = tenant.tenantId;
+    this.authTokenDraft = auth.getAccessToken() || '';
+    this.authUserDraft = auth.getUsername() || '';
   }
 
   ngOnInit(): void {
@@ -212,6 +218,15 @@ export class AppComponent implements OnInit {
     this.selectedOpp = null;
     this.selectedQuote = null;
     this.reloadAll();
+  }
+
+  saveAuth(): void {
+    this.auth.setAccessToken(this.authTokenDraft?.trim() || null);
+    this.auth.setUsername(this.authUserDraft?.trim() || null);
+    this.message = this.auth.getAccessToken()
+      ? 'Bearer token saved for CRM API calls'
+      : 'Auth token cleared — tenant header only';
+    this.error = '';
   }
 
   refreshStatus(): void {
@@ -917,6 +932,35 @@ export class AppComponent implements OnInit {
         this.loadOps();
       },
       error: (err) => this.setError(err, 'Adapter ingest failed'),
+    });
+  }
+
+  findDuplicates(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.api.findDuplicates(this.selectedLead.id).subscribe({
+      next: (rows) => {
+        if (!rows?.length) {
+          this.message = 'No duplicates by phone/email';
+          return;
+        }
+        const first = rows[0];
+        const dupId = Number(first['id']);
+        if (!dupId || !confirm(`Merge duplicate #${dupId} into #${this.selectedLead!.id}?`)) {
+          this.message = `Found ${rows.length} duplicate(s)`;
+          return;
+        }
+        this.api.mergeLeads(this.selectedLead!.id, dupId).subscribe({
+          next: () => {
+            this.message = `Merged #${dupId} into #${this.selectedLead!.id}`;
+            this.loadLeads();
+            this.loadTimeline(this.selectedLead!.id);
+          },
+          error: (err) => this.setError(err, 'Merge failed'),
+        });
+      },
+      error: (err) => this.setError(err, 'Duplicate search failed'),
     });
   }
 
