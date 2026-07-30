@@ -270,4 +270,95 @@ export class CrmApiService {
   adapterEvents(): Observable<Array<Record<string, unknown>>> {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/adapters/events`);
   }
+
+  // —— Phase 4 AI ——
+  summarizeLead(leadId: number, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/leads/${leadId}/summarize`, {}, { params });
+  }
+
+  nextBestAction(leadId: number, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/leads/${leadId}/nba`, {}, { params });
+  }
+
+  explainScore(leadId: number, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/leads/${leadId}/score-explain`, {}, { params });
+  }
+
+  churnUpsell(leadId: number, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/leads/${leadId}/churn-upsell`, {}, { params });
+  }
+
+  draftMessage(leadId: number, channel = 'WHATSAPP', language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams().set('channel', channel);
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/leads/${leadId}/draft`, {}, { params });
+  }
+
+  winPredict(opportunityId: number, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(
+      `${this.base}/ai/opportunities/${opportunityId}/win-predict`,
+      {},
+      { params }
+    );
+  }
+
+  ocrCard(body: Record<string, unknown>, language?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (language) {
+      params = params.set('language', language);
+    }
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/ocr/card`, body, { params });
+  }
+
+  copilot(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/ai/copilot`, body);
+  }
+
+  listAiInsights(relatedType: string, relatedId: number): Observable<Array<Record<string, unknown>>> {
+    const params = new HttpParams().set('relatedType', relatedType).set('relatedId', relatedId);
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/ai/insights`, { params });
+  }
+
+  // —— Phase 4 Enterprise ——
+  enterpriseSettings(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/enterprise/settings`);
+  }
+
+  updateEnterpriseSettings(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/enterprise/settings`, body);
+  }
+
+  ssoStatus(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/enterprise/sso`);
+  }
+
+  requestAuditExport(body: Record<string, unknown> = {}): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/enterprise/audit-exports`, body);
+  }
+
+  listAuditExports(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/enterprise/audit-exports`);
+  }
 }

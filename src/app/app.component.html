@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 3b — Scoring · Ops · ACL · Adapters</p>
+      <p class="tag">Phase 4 — AI · Residency · SSO · Audit export</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -35,6 +35,9 @@
         <button type="button" class="btn" [class.primary]="module === 'insights'" (click)="setModule('insights')">Insights</button>
         <button type="button" class="btn" [class.primary]="module === 'campaigns'" (click)="setModule('campaigns')">Campaigns</button>
         <button type="button" class="btn" [class.primary]="module === 'ops'" (click)="setModule('ops')">Ops</button>
+        <button type="button" class="btn" [class.primary]="module === 'enterprise'" (click)="setModule('enterprise')">
+          AI / Enterprise
+        </button>
       </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
@@ -552,6 +555,105 @@
       </section>
     </div>
   </ng-container>
+
+  <!-- ========== AI / ENTERPRISE (Phase 4) ========== -->
+  <ng-container *ngIf="module === 'enterprise'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Enterprise settings</h2>
+        <div class="form" *ngIf="enterpriseSettings as es; else loadEnt">
+          <label>
+            Data residency
+            <select [(ngModel)]="enterpriseForm.dataResidency" name="residency">
+              <option value="IN">IN</option>
+              <option value="EU">EU</option>
+              <option value="US">US</option>
+              <option value="APAC">APAC</option>
+              <option value="GLOBAL">GLOBAL</option>
+            </select>
+          </label>
+          <label>
+            Preferred language
+            <select [(ngModel)]="enterpriseForm.preferredLanguage" name="prefLang">
+              <option value="en">en</option>
+              <option value="hi">hi</option>
+              <option value="ta">ta</option>
+              <option value="te">te</option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" [(ngModel)]="enterpriseForm.aiEnabled" name="aiEn" /> AI enabled
+          </label>
+          <label class="check">
+            <input type="checkbox" [(ngModel)]="enterpriseForm.auditExportEnabled" name="audEn" /> Audit export
+          </label>
+          <label class="check">
+            <input type="checkbox" [(ngModel)]="enterpriseForm.ssoEnabled" name="ssoEn" /> SSO enabled
+          </label>
+          <input [(ngModel)]="enterpriseForm.ssoProvider" name="ssoProv" placeholder="SAML / OIDC provider" />
+          <input [(ngModel)]="enterpriseForm.ssoMetadataUrl" name="ssoMeta" placeholder="SSO metadata URL" />
+          <button type="button" class="btn primary" [disabled]="busy" (click)="saveEnterprise()">Save settings</button>
+          <p class="hint" *ngIf="ssoNote">{{ ssoNote }}</p>
+        </div>
+        <ng-template #loadEnt>
+          <button type="button" class="btn" (click)="loadEnterprise()">Load settings</button>
+        </ng-template>
+      </section>
+      <section class="panel">
+        <h2>Audit export</h2>
+        <button type="button" class="btn primary" [disabled]="busy" (click)="runAuditExport()">Export now (JSON)</button>
+        <ul class="member-list">
+          <li *ngFor="let j of auditExports">
+            <strong>#{{ j['id'] }}</strong>
+            <span class="badge">{{ j['status'] }}</span>
+            <span class="muted">{{ j['rowCount'] }} rows · {{ j['createdAt'] | date: 'short' }}</span>
+          </li>
+          <li *ngIf="!auditExports.length" class="muted">No exports yet.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="grid-2">
+      <section class="panel">
+        <h2>AI assist</h2>
+        <p class="hint">Uses selected lead (#{{ selectedLead?.id || 'none' }}) and preferred language.</p>
+        <div class="row wrap">
+          <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('summarize')">Summarize</button>
+          <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('nba')">NBA</button>
+          <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('score')">Explain score</button>
+          <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('churn')">Churn/upsell</button>
+          <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('draft')">Draft WA</button>
+        </div>
+        <div class="row wrap" style="margin-top: 0.75rem">
+          <button type="button" class="btn" [disabled]="!selectedOpp" (click)="runWinPredict()">Win predict (deal)</button>
+          <button type="button" class="btn" (click)="runOcrDemo()">OCR card demo</button>
+        </div>
+        <textarea
+          class="full"
+          rows="2"
+          [(ngModel)]="copilotQuestion"
+          name="copilotQ"
+          placeholder="Ask copilot…"
+        ></textarea>
+        <button type="button" class="btn primary" (click)="runCopilot()">Ask copilot</button>
+        <div class="ai-result" *ngIf="lastInsight as ins">
+          <strong>{{ ins['title'] }}</strong>
+          <span class="badge">{{ ins['insightType'] }} · {{ ins['confidence'] }}</span>
+          <pre>{{ ins['body'] }}</pre>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Recent insights</h2>
+        <button type="button" class="btn" [disabled]="!selectedLead" (click)="loadLeadInsights()">Refresh for lead</button>
+        <ul class="member-list">
+          <li *ngFor="let ins of aiInsights" class="clickable" (click)="lastInsight = ins">
+            <strong>{{ ins['insightType'] }}</strong>
+            <span class="muted">{{ ins['title'] }}</span>
+          </li>
+          <li *ngIf="!aiInsights.length" class="muted">Open a lead, then run AI actions.</li>
+        </ul>
+      </section>
+    </div>
+  </ng-container>
 </main>
 
 <!-- Lead detail drawer -->
@@ -586,11 +688,17 @@
     <div class="row wrap">
       <button type="button" class="btn" (click)="rescoreSelected()">Rescore</button>
       <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
+      <button type="button" class="btn" (click)="runAi('nba')">AI NBA</button>
+      <button type="button" class="btn" (click)="runAi('summarize')">AI summary</button>
     </div>
     <div class="row wrap">
       <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />
       <input type="number" [(ngModel)]="callForm.durationSec" name="callDur" />
       <button type="button" class="btn primary" (click)="logCallSelected()">Log call</button>
+    </div>
+    <div class="ai-result" *ngIf="lastInsight as ins">
+      <strong>{{ ins['title'] }}</strong>
+      <pre>{{ ins['body'] }}</pre>
     </div>
   </section>
 
@@ -679,6 +787,7 @@
     <h3>Quotations</h3>
     <button type="button" class="btn primary" (click)="quoteForm.opportunityId = opp.id; setModule('quotes')">New quote</button>
     <button type="button" class="btn" (click)="requestOppApproval()">Request approval</button>
+    <button type="button" class="btn" (click)="runWinPredict()">AI win predict</button>
     <ul class="member-list">
       <li *ngFor="let q of quotations" class="clickable" (click)="openQuote(q); setModule('quotes')">
         <strong>{{ q.quoteNumber }}</strong>
@@ -687,5 +796,9 @@
       </li>
       <li *ngIf="!quotations.length" class="muted">No quotes yet.</li>
     </ul>
+    <div class="ai-result" *ngIf="lastInsight as ins">
+      <strong>{{ ins['title'] }}</strong>
+      <pre>{{ ins['body'] }}</pre>
+    </div>
   </section>
 </aside>

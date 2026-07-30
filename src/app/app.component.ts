@@ -21,7 +21,7 @@ import {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
-  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops' = 'leads';
+  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops' | 'enterprise' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
@@ -126,6 +126,23 @@ export class AppComponent implements OnInit {
   adapterName = '';
   reportCode = 'DAILY_FUNNEL';
 
+  enterpriseSettings: Record<string, unknown> | null = null;
+  enterpriseForm = {
+    dataResidency: 'IN',
+    preferredLanguage: 'en',
+    aiEnabled: true,
+    auditExportEnabled: true,
+    ssoEnabled: false,
+    ssoProvider: '',
+    ssoMetadataUrl: '',
+  };
+  ssoNote = '';
+  auditExports: Array<Record<string, unknown>> = [];
+  aiInsights: Array<Record<string, unknown>> = [];
+  lastInsight: Record<string, unknown> | null = null;
+  copilotQuestion = '';
+  aiLanguage = 'en';
+
   importFile: File | null = null;
   importResult: ImportResult | null = null;
   assignRoundRobin = false;
@@ -161,11 +178,13 @@ export class AppComponent implements OnInit {
     }));
   }
 
-  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops'): void {
+  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops' | 'enterprise'): void {
     this.module = m;
-    this.selectedLead = null;
-    this.selectedOpp = null;
-    this.selectedQuote = null;
+    if (m !== 'enterprise') {
+      this.selectedLead = null;
+      this.selectedOpp = null;
+      this.selectedQuote = null;
+    }
     if (m === 'deals') {
       this.loadOpportunities();
     } else if (m === 'quotes') {
@@ -176,6 +195,11 @@ export class AppComponent implements OnInit {
       this.loadCampaigns();
     } else if (m === 'ops') {
       this.loadOps();
+    } else if (m === 'enterprise') {
+      this.loadEnterprise();
+      if (this.selectedLead) {
+        this.loadLeadInsights();
+      }
     }
   }
 
@@ -479,6 +503,7 @@ export class AppComponent implements OnInit {
     this.selectedQuote = null;
     this.noteDraft = '';
     this.loadTimeline(lead.id);
+    this.loadLeadInsights();
   }
 
   closeLead(): void {
@@ -892,6 +917,157 @@ export class AppComponent implements OnInit {
         this.loadOps();
       },
       error: (err) => this.setError(err, 'Adapter ingest failed'),
+    });
+  }
+
+  loadEnterprise(): void {
+    this.api.enterpriseSettings().subscribe({
+      next: (s) => {
+        this.enterpriseSettings = s;
+        this.enterpriseForm = {
+          dataResidency: String(s['dataResidency'] || 'IN'),
+          preferredLanguage: String(s['preferredLanguage'] || 'en'),
+          aiEnabled: !!s['aiEnabled'],
+          auditExportEnabled: !!s['auditExportEnabled'],
+          ssoEnabled: !!s['ssoEnabled'],
+          ssoProvider: String(s['ssoProvider'] || ''),
+          ssoMetadataUrl: String(s['ssoMetadataUrl'] || ''),
+        };
+        this.aiLanguage = this.enterpriseForm.preferredLanguage;
+      },
+      error: (err) => this.setError(err, 'Enterprise settings failed'),
+    });
+    this.api.ssoStatus().subscribe({
+      next: (s) => (this.ssoNote = String(s['note'] || '')),
+      error: () => (this.ssoNote = ''),
+    });
+    this.api.listAuditExports().subscribe({
+      next: (rows) => (this.auditExports = rows || []),
+      error: () => (this.auditExports = []),
+    });
+  }
+
+  saveEnterprise(): void {
+    this.busy = true;
+    this.api.updateEnterpriseSettings({ ...this.enterpriseForm }).subscribe({
+      next: (s) => {
+        this.busy = false;
+        this.enterpriseSettings = s;
+        this.message = `Enterprise saved · residency ${s['dataResidency']}`;
+        this.aiLanguage = String(s['preferredLanguage'] || 'en');
+        this.loadEnterprise();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Save enterprise failed');
+      },
+    });
+  }
+
+  runAuditExport(): void {
+    this.busy = true;
+    this.api.requestAuditExport({ format: 'JSON' }).subscribe({
+      next: (job) => {
+        this.busy = false;
+        this.message = `Audit export #${job['id']} ${job['status']} (${job['rowCount']} rows)`;
+        this.loadEnterprise();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Audit export failed');
+      },
+    });
+  }
+
+  runAi(kind: 'summarize' | 'nba' | 'score' | 'churn' | 'draft'): void {
+    if (!this.selectedLead) {
+      this.error = 'Select a lead first';
+      return;
+    }
+    const id = this.selectedLead.id;
+    const lang = this.aiLanguage || this.enterpriseForm.preferredLanguage;
+    const obs =
+      kind === 'summarize'
+        ? this.api.summarizeLead(id, lang)
+        : kind === 'nba'
+          ? this.api.nextBestAction(id, lang)
+          : kind === 'score'
+            ? this.api.explainScore(id, lang)
+            : kind === 'churn'
+              ? this.api.churnUpsell(id, lang)
+              : this.api.draftMessage(id, 'WHATSAPP', lang);
+    obs.subscribe({
+      next: (ins) => {
+        this.lastInsight = ins;
+        this.message = String(ins['title'] || 'AI done');
+        this.loadLeadInsights();
+        this.loadTimeline(id);
+      },
+      error: (err) => this.setError(err, 'AI action failed'),
+    });
+  }
+
+  runWinPredict(): void {
+    if (!this.selectedOpp) {
+      this.error = 'Select a deal first';
+      return;
+    }
+    this.api.winPredict(this.selectedOpp.id, this.aiLanguage || this.enterpriseForm.preferredLanguage).subscribe({
+      next: (ins) => {
+        this.lastInsight = ins;
+        this.message = String(ins['title'] || 'Win predict');
+      },
+      error: (err) => this.setError(err, 'Win predict failed'),
+    });
+  }
+
+  runOcrDemo(): void {
+    this.api
+      .ocrCard(
+        {
+          text: 'Name: Priya Shah\nPhone: 9876543210\nEmail: priya@example.com\nCompany: Acme Retail',
+          leadId: this.selectedLead?.id || 0,
+        },
+        this.aiLanguage
+      )
+      .subscribe({
+        next: (ins) => {
+          this.lastInsight = ins;
+          this.message = 'OCR card parsed';
+        },
+        error: (err) => this.setError(err, 'OCR failed'),
+      });
+  }
+
+  runCopilot(): void {
+    if (!this.copilotQuestion.trim()) {
+      this.error = 'Enter a copilot question';
+      return;
+    }
+    this.api
+      .copilot({
+        question: this.copilotQuestion.trim(),
+        leadId: this.selectedLead?.id ?? null,
+        opportunityId: this.selectedOpp?.id ?? null,
+        language: this.aiLanguage || this.enterpriseForm.preferredLanguage,
+      })
+      .subscribe({
+        next: (ins) => {
+          this.lastInsight = ins;
+          this.message = 'Copilot replied';
+        },
+        error: (err) => this.setError(err, 'Copilot failed'),
+      });
+  }
+
+  loadLeadInsights(): void {
+    if (!this.selectedLead) {
+      this.aiInsights = [];
+      return;
+    }
+    this.api.listAiInsights('LEAD', this.selectedLead.id).subscribe({
+      next: (rows) => (this.aiInsights = rows || []),
+      error: () => (this.aiInsights = []),
     });
   }
 

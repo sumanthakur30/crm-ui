@@ -338,6 +338,26 @@ code {
   flex-wrap: wrap;
 }
 
+.ai-result {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #f0f4f8;
+  border: 1px solid #d5dde6;
+  border-radius: 0.4rem;
+
+  strong {
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  pre {
+    margin: 0.5rem 0 0;
+    white-space: pre-wrap;
+    font-size: 0.8rem;
+    font-family: inherit;
+  }
+}
+
 pre.share {
   margin: 0.5rem 0 0;
   padding: 0.75rem;
