@@ -13,7 +13,7 @@ export class AuthTokenInterceptor implements HttpInterceptor {
   constructor(private readonly auth: AuthSessionService) {}
 
   intercept(req: HttpRequest<unknown>, next: HttpHandler): Observable<HttpEvent<unknown>> {
-    if (!req.url.includes('/api/') || req.url.includes('/api/v1/crm/public/')) {
+    if (!req.url.includes('/api/') || req.url.includes('/api/v1/crm/public/') || req.url.includes('/api/v1/auth/login')) {
       return next.handle(req);
     }
     const token = this.auth.getAccessToken();

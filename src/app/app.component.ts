@@ -32,6 +32,10 @@ export class AppComponent implements OnInit {
   searchQ = '';
   authTokenDraft = '';
   authUserDraft = '';
+  loginShopId = '';
+  loginUsername = '';
+  loginPassword = '';
+  showLogin = false;
 
   workspace: Workspace | null = null;
   pipelines: Pipeline[] = [];
@@ -227,6 +231,48 @@ export class AppComponent implements OnInit {
       ? 'Bearer token saved for CRM API calls'
       : 'Auth token cleared — tenant header only';
     this.error = '';
+  }
+
+  login(): void {
+    if (!this.loginShopId.trim() || !this.loginUsername.trim() || !this.loginPassword) {
+      this.error = 'shopId, username, and password required';
+      return;
+    }
+    this.busy = true;
+    this.auth.login(this.loginShopId.trim(), this.loginUsername.trim(), this.loginPassword).subscribe({
+      next: (res) => {
+        this.busy = false;
+        if (res.mfaRequired) {
+          this.error = 'MFA required — complete MFA in shop UI, then paste token here';
+          return;
+        }
+        this.authTokenDraft = res.accessToken || '';
+        this.authUserDraft = res.username || this.loginUsername;
+        if (res.shopId && !this.tenantDraft) {
+          this.tenantDraft = res.shopId;
+          this.saveTenant();
+        } else if (res.shopId) {
+          this.tenantDraft = String(res.shopId);
+          this.saveTenant();
+        }
+        this.loginPassword = '';
+        this.showLogin = false;
+        this.message = `Logged in as ${res.username} (${res.role})`;
+        this.error = '';
+        this.refreshStatus();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Login failed — is auth-service up?');
+      },
+    });
+  }
+
+  logout(): void {
+    this.auth.clear();
+    this.authTokenDraft = '';
+    this.authUserDraft = '';
+    this.message = 'Logged out';
   }
 
   refreshStatus(): void {

@@ -10,12 +10,27 @@
     <label for="tenant">Tenant</label>
     <input id="tenant" [(ngModel)]="tenantDraft" name="tenant" placeholder="demo-crm" />
     <button type="button" class="btn" (click)="saveTenant()">Set</button>
-    <input [(ngModel)]="authUserDraft" name="authUser" placeholder="user id" style="max-width: 7rem" />
-    <input [(ngModel)]="authTokenDraft" name="authTok" placeholder="Bearer token (optional)" style="min-width: 10rem" />
-    <button type="button" class="btn" (click)="saveAuth()">Auth</button>
+    <button type="button" class="btn" (click)="showLogin = !showLogin">Login</button>
+    <button type="button" class="btn ghost" *ngIf="auth.getAccessToken()" (click)="logout()">Logout</button>
     <button type="button" class="btn ghost" (click)="refreshStatus()">Ping</button>
   </div>
 </header>
+
+<section class="panel compact" *ngIf="showLogin" style="margin: 0 1.25rem 0.75rem">
+  <h2>Auth login</h2>
+  <div class="row wrap">
+    <input [(ngModel)]="loginShopId" name="loginShop" placeholder="shopId" />
+    <input [(ngModel)]="loginUsername" name="loginUser" placeholder="username" />
+    <input type="password" [(ngModel)]="loginPassword" name="loginPass" placeholder="password" />
+    <button type="button" class="btn primary" [disabled]="busy" (click)="login()">Sign in</button>
+  </div>
+  <p class="hint">Uses auth-service POST /api/v1/auth/login. MFA users: complete MFA elsewhere, then paste token below.</p>
+  <div class="row wrap">
+    <input [(ngModel)]="authUserDraft" name="authUser" placeholder="user id" style="max-width: 7rem" />
+    <input [(ngModel)]="authTokenDraft" name="authTok" placeholder="Bearer token (optional)" style="min-width: 12rem" />
+    <button type="button" class="btn" (click)="saveAuth()">Save token</button>
+  </div>
+</section>
 
 <main class="layout" [class.drawer-open]="!!selectedLead || !!selectedOpp">
   <p class="flash ok" *ngIf="message">{{ message }}</p>

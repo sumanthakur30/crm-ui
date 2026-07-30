@@ -1,11 +1,27 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, tap } from 'rxjs';
 
-/** Lightweight session mirror of shop-management-ui auth storage (no full login UI required). */
+export interface AuthLoginResponse {
+  accountId?: number;
+  shopId?: string;
+  tenantId?: number;
+  username?: string;
+  role?: string;
+  accessToken?: string;
+  mfaRequired?: boolean;
+  mfaToken?: string;
+}
+
+/** Lightweight session mirror of shop-management-ui auth storage. */
 @Injectable({ providedIn: 'root' })
 export class AuthSessionService {
   private readonly tokenKey = 'sf.accessToken';
   private readonly roleKey = 'sf.role';
   private readonly userKey = 'sf.username';
+  private readonly shopKey = 'sf.shopId';
+
+  constructor(private readonly http: HttpClient) {}
 
   getAccessToken(): string | null {
     return localStorage.getItem(this.tokenKey) || sessionStorage.getItem(this.tokenKey);
@@ -43,9 +59,44 @@ export class AuthSessionService {
     localStorage.setItem(this.userKey, username.trim());
   }
 
+  getShopId(): string | null {
+    return localStorage.getItem(this.shopKey);
+  }
+
+  setShopId(shopId: string | null): void {
+    if (!shopId) {
+      localStorage.removeItem(this.shopKey);
+      return;
+    }
+    localStorage.setItem(this.shopKey, shopId.trim());
+  }
+
   clear(): void {
     this.setAccessToken(null);
     this.setRole(null);
     this.setUsername(null);
+    this.setShopId(null);
+  }
+
+  login(shopId: string, username: string, password: string): Observable<AuthLoginResponse> {
+    return this.http.post<AuthLoginResponse>('/api/v1/auth/login', { shopId, username, password }).pipe(
+      tap((res) => {
+        if (res.mfaRequired) {
+          return;
+        }
+        if (res.accessToken) {
+          this.setAccessToken(res.accessToken);
+        }
+        if (res.role) {
+          this.setRole(res.role);
+        }
+        if (res.username) {
+          this.setUsername(res.username);
+        }
+        if (res.shopId) {
+          this.setShopId(res.shopId);
+        }
+      })
+    );
   }
 }
