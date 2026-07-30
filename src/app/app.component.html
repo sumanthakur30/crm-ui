@@ -272,9 +272,23 @@
             <div><dt>Total</dt><dd><strong>₹{{ q.totalAmount }}</strong></dd></div>
           </dl>
           <div class="row wrap">
-            <button type="button" class="btn" [disabled]="busy" (click)="sendQuote(q)">Mark sent</button>
+            <label>Channel
+              <select [(ngModel)]="sendForm.channel" name="sendCh">
+                <option value="">Mark sent only</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="EMAIL">Email</option>
+                <option value="SMS">SMS</option>
+              </select>
+            </label>
+            <label>Recipient
+              <input [(ngModel)]="sendForm.recipient" name="sendTo" placeholder="phone or email" />
+            </label>
+          </div>
+          <div class="row wrap">
+            <button type="button" class="btn" [disabled]="busy" (click)="sendQuote(q)">Send / mark sent</button>
             <button type="button" class="btn primary" [disabled]="busy" (click)="acceptQuote(q)">Accept</button>
           </div>
+          <p class="hint">Enable with CRM_NOTIFICATION_ENABLED=true and notification-service on :8087.</p>
           <h3>Share text</h3>
           <pre class="share">{{ shareText(q) }}</pre>
         </ng-container>
@@ -332,6 +346,16 @@
   <section>
     <h3>Convert to deal</h3>
     <button type="button" class="btn primary" [disabled]="busy" (click)="createOpportunity(lead)">Create opportunity</button>
+  </section>
+
+  <section>
+    <h3>Comms sequence</h3>
+    <div class="row wrap">
+      <button type="button" class="btn" (click)="ensureSequence()">Ensure welcome</button>
+      <button type="button" class="btn" (click)="processSequences()">Process due</button>
+    </div>
+    <input class="full" [(ngModel)]="enrollRecipient" name="enrollTo" [placeholder]="lead.phone || lead.email || 'phone/email'" />
+    <button type="button" class="btn primary" [disabled]="busy" (click)="enrollSelectedLead()">Enroll lead</button>
   </section>
 
   <section>

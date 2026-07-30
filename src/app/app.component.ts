@@ -81,6 +81,14 @@ export class AppComponent implements OnInit {
     gstRate: 18,
   };
 
+  sendForm = {
+    channel: 'WHATSAPP' as 'WHATSAPP' | 'EMAIL' | 'SMS' | '',
+    recipient: '',
+  };
+
+  sequenceId: number | null = null;
+  enrollRecipient = '';
+
   importFile: File | null = null;
   importResult: ImportResult | null = null;
   assignRoundRobin = false;
@@ -451,12 +459,22 @@ export class AppComponent implements OnInit {
   }
 
   sendQuote(q: Quotation): void {
+    const channel = this.sendForm.channel?.trim();
+    const recipient = this.sendForm.recipient?.trim();
+    if (channel && !recipient) {
+      this.error = 'Recipient required when a channel is selected';
+      return;
+    }
     this.busy = true;
-    this.api.sendQuotation(q.id).subscribe({
+    const payload = channel && recipient ? { channel, recipient } : {};
+    this.api.sendQuotation(q.id, payload).subscribe({
       next: (updated) => {
         this.busy = false;
         this.selectedQuote = updated;
-        this.message = `Quote ${updated.quoteNumber} marked SENT`;
+        const delivery = updated.sharePayload?.['lastDelivery'] as { status?: string } | undefined;
+        this.message =
+          `Quote ${updated.quoteNumber} SENT` +
+          (delivery?.status ? ` · delivery ${delivery.status}` : '');
         this.loadQuotesForOpp(updated.opportunityId);
       },
       error: (err) => {
@@ -641,6 +659,59 @@ export class AppComponent implements OnInit {
       return '';
     }
     return String(payload['whatsappText'] || payload['emailText'] || JSON.stringify(payload, null, 2));
+  }
+
+  ensureSequence(): void {
+    this.api.ensureWelcomeSequence().subscribe({
+      next: (seq) => {
+        this.sequenceId = seq.id;
+        this.message = `Sequence ready: ${seq.code} (#${seq.id})`;
+      },
+      error: (err) => this.setError(err, 'Failed to ensure sequence'),
+    });
+  }
+
+  enrollSelectedLead(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    if (!this.sequenceId) {
+      this.error = 'Ensure welcome sequence first';
+      return;
+    }
+    const recipient = this.enrollRecipient.trim() || this.selectedLead.phone || this.selectedLead.email;
+    if (!recipient) {
+      this.error = 'Enter recipient phone/email';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .enrollSequence({
+        sequenceId: this.sequenceId,
+        leadId: this.selectedLead.id,
+        recipient,
+        channel: 'WHATSAPP',
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Lead #${this.selectedLead!.id} enrolled`;
+          this.loadTimeline(this.selectedLead!.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Enroll failed');
+        },
+      });
+  }
+
+  processSequences(): void {
+    this.api.processDueSequences().subscribe({
+      next: (r) => {
+        this.message = `Sequences: processed ${r.processed}, completed ${r.completed}, failed ${r.failed}`;
+      },
+      error: (err) => this.setError(err, 'process-due failed'),
+    });
   }
 
   private setError(err: unknown, fallback: string): void {

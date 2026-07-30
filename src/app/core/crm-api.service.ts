@@ -127,11 +127,32 @@ export class CrmApiService {
     return this.http.get<Quotation[]>(`${this.base}/quotations/by-opportunity/${opportunityId}`);
   }
 
-  sendQuotation(id: number): Observable<Quotation> {
-    return this.http.post<Quotation>(`${this.base}/quotations/${id}/send`, {});
+  sendQuotation(id: number, body?: { channel?: string; recipient?: string }): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/send`, body ?? {});
   }
 
   acceptQuotation(id: number): Observable<Quotation> {
     return this.http.post<Quotation>(`${this.base}/quotations/${id}/accept`, {});
+  }
+
+  ensureWelcomeSequence(): Observable<{ id: number; code: string; name: string }> {
+    return this.http.post<{ id: number; code: string; name: string }>(`${this.base}/sequences/ensure-welcome`, {});
+  }
+
+  enrollSequence(body: {
+    sequenceId: number;
+    leadId?: number | null;
+    opportunityId?: number | null;
+    recipient: string;
+    channel?: string;
+  }): Observable<unknown> {
+    return this.http.post(`${this.base}/sequences/enrollments`, body);
+  }
+
+  processDueSequences(limit = 20): Observable<{ processed: number; completed: number; failed: number }> {
+    return this.http.post<{ processed: number; completed: number; failed: number }>(
+      `${this.base}/sequences/process-due?limit=${limit}`,
+      {}
+    );
   }
 }
