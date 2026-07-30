@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 3 — Campaigns · UTM · Insights</p>
+      <p class="tag">Phase 3b — Scoring · Ops · ACL · Adapters</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -34,6 +34,7 @@
         <button type="button" class="btn" [class.primary]="module === 'quotes'" (click)="setModule('quotes')">Quotes</button>
         <button type="button" class="btn" [class.primary]="module === 'insights'" (click)="setModule('insights')">Insights</button>
         <button type="button" class="btn" [class.primary]="module === 'campaigns'" (click)="setModule('campaigns')">Campaigns</button>
+        <button type="button" class="btn" [class.primary]="module === 'ops'" (click)="setModule('ops')">Ops</button>
       </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
@@ -480,6 +481,77 @@
       </div>
     </section>
   </ng-container>
+
+  <!-- ========== OPS (Phase 3b) ========== -->
+  <ng-container *ngIf="module === 'ops'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Forecast</h2>
+        <p class="hint" *ngIf="forecast as f">
+          Open {{ f['openCount'] }} · Pipeline ₹{{ f['pipelineAmount'] }} · Weighted ₹{{ f['weightedForecast'] }}
+        </p>
+        <button type="button" class="btn" (click)="loadOps()">Refresh ops</button>
+      </section>
+      <section class="panel">
+        <h2>Approvals</h2>
+        <ul class="member-list">
+          <li *ngFor="let a of approvals">
+            <strong>{{ a['title'] }}</strong>
+            <span class="badge">{{ a['status'] }}</span>
+            <button type="button" class="btn" (click)="decide(+a['id']!, true)">Approve</button>
+            <button type="button" class="btn" (click)="decide(+a['id']!, false)">Reject</button>
+          </li>
+          <li *ngIf="!approvals.length" class="muted">No pending approvals — open a deal and request one.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="grid-3">
+      <section class="panel">
+        <h2>Score rules</h2>
+        <ul class="member-list">
+          <li *ngFor="let r of scoreRules">
+            <strong>{{ r['code'] }}</strong>
+            <span class="muted">{{ r['eventType'] }} · {{ r['points'] }} pts</span>
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Reports + ACL</h2>
+        <input [(ngModel)]="reportCode" name="repCode" placeholder="DAILY_FUNNEL" />
+        <div class="row wrap">
+          <button type="button" class="btn" (click)="scheduleReport()">Save schedule</button>
+          <button type="button" class="btn" (click)="runReports()">Run due</button>
+          <button type="button" class="btn primary" (click)="ensureAcl()">Ensure ACL</button>
+        </div>
+        <ul class="member-list">
+          <li *ngFor="let a of fieldAcl">
+            <strong>{{ a['roleCode'] }}</strong>
+            <span class="muted">{{ a['objectType'] }}.{{ a['fieldName'] }} → {{ a['access'] }}</span>
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Inbound adapters</h2>
+        <select [(ngModel)]="adapterProvider" name="adProv">
+          <option value="META">Meta</option>
+          <option value="GOOGLE">Google</option>
+          <option value="MISSED_CALL">Missed call</option>
+          <option value="CHATBOT">Chatbot</option>
+        </select>
+        <input [(ngModel)]="adapterName" name="adName" placeholder="Name" />
+        <input [(ngModel)]="adapterPhone" name="adPhone" placeholder="Phone" />
+        <p class="hint">Meta/Google use campaign public key when set on Campaigns tab.</p>
+        <button type="button" class="btn primary" (click)="runAdapter()">Ingest</button>
+        <ul class="member-list">
+          <li *ngFor="let e of adapterEvents">
+            <strong>{{ e['provider'] }}</strong>
+            <span class="badge">{{ e['status'] }}</span>
+            <span class="muted">lead {{ e['leadId'] || '—' }}</span>
+          </li>
+        </ul>
+      </section>
+    </div>
+  </ng-container>
 </main>
 
 <!-- Lead detail drawer -->
@@ -506,6 +578,20 @@
   <section>
     <h3>Convert to deal</h3>
     <button type="button" class="btn primary" [disabled]="busy" (click)="createOpportunity(lead)">Create opportunity</button>
+  </section>
+
+  <section>
+    <h3>Score / call / meeting</h3>
+    <p class="hint">Score: {{ lead.score }}</p>
+    <div class="row wrap">
+      <button type="button" class="btn" (click)="rescoreSelected()">Rescore</button>
+      <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
+    </div>
+    <div class="row wrap">
+      <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />
+      <input type="number" [(ngModel)]="callForm.durationSec" name="callDur" />
+      <button type="button" class="btn primary" (click)="logCallSelected()">Log call</button>
+    </div>
   </section>
 
   <section>
@@ -592,6 +678,7 @@
   <section>
     <h3>Quotations</h3>
     <button type="button" class="btn primary" (click)="quoteForm.opportunityId = opp.id; setModule('quotes')">New quote</button>
+    <button type="button" class="btn" (click)="requestOppApproval()">Request approval</button>
     <ul class="member-list">
       <li *ngFor="let q of quotations" class="clickable" (click)="openQuote(q); setModule('quotes')">
         <strong>{{ q.quoteNumber }}</strong>

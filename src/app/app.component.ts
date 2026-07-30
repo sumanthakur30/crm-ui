@@ -21,7 +21,7 @@ import {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
-  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' = 'leads';
+  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
@@ -114,6 +114,17 @@ export class AppComponent implements OnInit {
   convertTarget: 'SHOP_CUSTOMER' | 'SCHOOL_INQUIRY' | 'FIELD_FORCE' = 'SHOP_CUSTOMER';
   analytics: Record<string, unknown> | null = null;
   openTasks: Array<Record<string, unknown>> = [];
+  forecast: Record<string, unknown> | null = null;
+  approvals: Array<Record<string, unknown>> = [];
+  fieldAcl: Array<Record<string, unknown>> = [];
+  adapterEvents: Array<Record<string, unknown>> = [];
+  scoreRules: Array<Record<string, unknown>> = [];
+  callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
+  meetingTitle = 'Discovery call';
+  adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
+  adapterPhone = '';
+  adapterName = '';
+  reportCode = 'DAILY_FUNNEL';
 
   importFile: File | null = null;
   importResult: ImportResult | null = null;
@@ -150,7 +161,7 @@ export class AppComponent implements OnInit {
     }));
   }
 
-  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns'): void {
+  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'ops'): void {
     this.module = m;
     this.selectedLead = null;
     this.selectedOpp = null;
@@ -163,6 +174,8 @@ export class AppComponent implements OnInit {
       this.loadInsights();
     } else if (m === 'campaigns') {
       this.loadCampaigns();
+    } else if (m === 'ops') {
+      this.loadOps();
     }
   }
 
@@ -714,6 +727,172 @@ export class AppComponent implements OnInit {
       return '—';
     }
     return this.campaigns.find((c) => c.id === id)?.name || String(id);
+  }
+
+  loadOps(): void {
+    this.api.forecast().subscribe({
+      next: (f) => (this.forecast = f),
+      error: (err) => this.setError(err, 'Forecast failed'),
+    });
+    this.api.listApprovals().subscribe({
+      next: (a) => (this.approvals = a || []),
+      error: () => (this.approvals = []),
+    });
+    this.api.listFieldAcl().subscribe({
+      next: (a) => (this.fieldAcl = a || []),
+      error: () => (this.fieldAcl = []),
+    });
+    this.api.adapterEvents().subscribe({
+      next: (e) => (this.adapterEvents = e || []),
+      error: () => (this.adapterEvents = []),
+    });
+    this.api.ensureScoreRules().subscribe({
+      next: (r) => (this.scoreRules = r || []),
+      error: () => (this.scoreRules = []),
+    });
+  }
+
+  rescoreSelected(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.api.rescoreLead(this.selectedLead.id).subscribe({
+      next: (lead) => {
+        this.selectedLead = lead;
+        this.message = `Lead score ${lead.score}`;
+        this.loadLeads();
+      },
+      error: (err) => this.setError(err, 'Rescore failed'),
+    });
+  }
+
+  logCallSelected(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.api
+      .logCall({
+        leadId: this.selectedLead.id,
+        phone: this.callForm.phone || this.selectedLead.phone,
+        outcome: this.callForm.outcome,
+        durationSec: this.callForm.durationSec,
+        direction: 'OUTBOUND',
+      })
+      .subscribe({
+        next: () => {
+          this.message = 'Call logged (+score if connected)';
+          this.loadTimeline(this.selectedLead!.id);
+          this.loadLeads();
+        },
+        error: (err) => this.setError(err, 'Call log failed'),
+      });
+  }
+
+  bookMeetingSelected(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const starts = new Date(Date.now() + 3600_000).toISOString();
+    this.api
+      .createCalendar({
+        relatedType: 'LEAD',
+        relatedId: this.selectedLead.id,
+        title: this.meetingTitle || 'Meeting',
+        startsAt: starts,
+      })
+      .subscribe({
+        next: () => {
+          this.message = 'Meeting booked (+score)';
+          this.loadTimeline(this.selectedLead!.id);
+          this.loadLeads();
+        },
+        error: (err) => this.setError(err, 'Calendar failed'),
+      });
+  }
+
+  requestOppApproval(): void {
+    if (!this.selectedOpp) {
+      return;
+    }
+    this.api
+      .requestApproval({
+        objectType: 'OPPORTUNITY',
+        objectId: this.selectedOpp.id,
+        title: `Approve deal ${this.selectedOpp.name}`,
+      })
+      .subscribe({
+        next: () => {
+          this.message = 'Approval requested';
+          this.loadOps();
+        },
+        error: (err) => this.setError(err, 'Approval failed'),
+      });
+  }
+
+  decide(id: number, approve: boolean): void {
+    this.api.decideApproval(id, approve).subscribe({
+      next: () => {
+        this.message = approve ? 'Approved' : 'Rejected';
+        this.loadOps();
+      },
+      error: (err) => this.setError(err, 'Decide failed'),
+    });
+  }
+
+  ensureAcl(): void {
+    this.api.ensureFieldAcl().subscribe({
+      next: (rows) => {
+        this.fieldAcl = rows || [];
+        this.message = 'Default field ACL seeded';
+      },
+      error: (err) => this.setError(err, 'ACL failed'),
+    });
+  }
+
+  scheduleReport(): void {
+    this.api
+      .upsertReportSchedule({
+        code: this.reportCode || 'DAILY_FUNNEL',
+        name: 'Daily funnel digest',
+        reportType: 'FUNNEL',
+        frequency: 'DAILY',
+        recipients: ['ops@example.com'],
+        active: true,
+      })
+      .subscribe({
+        next: () => {
+          this.message = 'Report schedule saved';
+        },
+        error: (err) => this.setError(err, 'Schedule failed'),
+      });
+  }
+
+  runReports(): void {
+    this.api.runReports().subscribe({
+      next: (r) => {
+        this.message = `Reports ran: ${r['ran']}`;
+      },
+      error: (err) => this.setError(err, 'Run reports failed'),
+    });
+  }
+
+  runAdapter(): void {
+    const body: Record<string, unknown> = {
+      name: this.adapterName || 'Adapter lead',
+      phone: this.adapterPhone || '9876500000',
+      externalId: `${this.adapterProvider}-${Date.now()}`,
+    };
+    if (this.captureDemo.publicKey && (this.adapterProvider === 'META' || this.adapterProvider === 'GOOGLE')) {
+      body['publicKey'] = this.captureDemo.publicKey;
+    }
+    this.api.adapterIngest(this.adapterProvider, body).subscribe({
+      next: (res) => {
+        this.message = `${this.adapterProvider} → ${res['status']} lead ${res['leadId']}`;
+        this.loadLeads();
+        this.loadOps();
+      },
+      error: (err) => this.setError(err, 'Adapter ingest failed'),
+    });
   }
 
   loadTimeline(leadId: number): void {

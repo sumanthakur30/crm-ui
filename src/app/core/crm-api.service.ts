@@ -205,4 +205,69 @@ export class CrmApiService {
   publicCapture(publicKey: string, body: Record<string, unknown>): Observable<Lead> {
     return this.http.post<Lead>(`${this.base}/public/capture/${publicKey}`, body);
   }
+
+  ensureScoreRules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.post<Array<Record<string, unknown>>>(`${this.base}/scoring/rules/ensure-defaults`, {});
+  }
+
+  scoreEvent(leadId: number, eventType: string, summary?: string): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/scoring/leads/${leadId}/events`, { eventType, summary });
+  }
+
+  rescoreLead(leadId: number): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/scoring/leads/${leadId}/rescore`, {});
+  }
+
+  forecast(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/ops/forecast`);
+  }
+
+  listApprovals(status = 'PENDING'): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/ops/approvals`, {
+      params: new HttpParams().set('status', status),
+    });
+  }
+
+  requestApproval(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/ops/approvals`, body);
+  }
+
+  decideApproval(id: number, approve: boolean): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(
+      `${this.base}/ops/approvals/${id}/decide?approve=${approve}`,
+      {}
+    );
+  }
+
+  logCall(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/ops/calls`, body);
+  }
+
+  createCalendar(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/ops/calendar`, body);
+  }
+
+  runReports(): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/reports/run-due`, {});
+  }
+
+  upsertReportSchedule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/reports/schedules`, body);
+  }
+
+  ensureFieldAcl(): Observable<Array<Record<string, unknown>>> {
+    return this.http.post<Array<Record<string, unknown>>>(`${this.base}/acl/fields/ensure-defaults`, {});
+  }
+
+  listFieldAcl(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/acl/fields`);
+  }
+
+  adapterIngest(provider: string, body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/adapters/${provider}`, body);
+  }
+
+  adapterEvents(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/adapters/events`);
+  }
 }
