@@ -1,0 +1,119 @@
+<header class="top">
+  <div class="brand">
+    <span class="mark">SF</span>
+    <div>
+      <h1>SugamFlow CRM</h1>
+      <p class="tag">Phase 1 — leads workspace</p>
+    </div>
+  </div>
+  <div class="tenant-bar">
+    <label for="tenant">Tenant ID</label>
+    <input id="tenant" [(ngModel)]="tenantDraft" name="tenant" placeholder="demo-crm" />
+    <button type="button" class="btn" (click)="saveTenant()">Set tenant</button>
+    <button type="button" class="btn ghost" (click)="refreshStatus()">Ping API</button>
+  </div>
+</header>
+
+<main class="layout">
+  <p class="flash ok" *ngIf="message">{{ message }}</p>
+  <p class="flash err" *ngIf="error">{{ error }}</p>
+
+  <section class="panel">
+    <h2>Workspace</h2>
+    <div class="row">
+      <label>
+        Name
+        <input [(ngModel)]="workspaceName" name="wsName" />
+      </label>
+      <label>
+        Template
+        <input [(ngModel)]="templateCode" name="template" placeholder="GENERIC" />
+      </label>
+      <button type="button" class="btn primary" [disabled]="busy" (click)="bootstrapWorkspace()">
+        Bootstrap
+      </button>
+      <button type="button" class="btn ghost" (click)="loadCurrentWorkspace()">Load current</button>
+    </div>
+    <dl class="meta" *ngIf="workspace as ws">
+      <div><dt>Id</dt><dd>{{ ws.id }}</dd></div>
+      <div><dt>Name</dt><dd>{{ ws.name }}</dd></div>
+      <div><dt>Template</dt><dd>{{ ws.templateCode || '—' }}</dd></div>
+      <div><dt>Default pipeline</dt><dd>{{ ws.defaultPipelineId || '—' }}</dd></div>
+    </dl>
+  </section>
+
+  <div class="grid-2">
+    <section class="panel">
+      <h2>Create lead</h2>
+      <form class="form" (ngSubmit)="createLead()">
+        <label>Title * <input required [(ngModel)]="leadForm.title" name="title" /></label>
+        <label>Contact <input [(ngModel)]="leadForm.displayName" name="displayName" /></label>
+        <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
+        <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
+        <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
+        <label>Source <input [(ngModel)]="leadForm.sourceCode" name="sourceCode" /></label>
+        <button type="submit" class="btn primary" [disabled]="busy">Create</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Import CSV</h2>
+      <p class="hint">POST multipart to <code>/api/v1/crm/leads/import</code>. Headers: title, phone, email, company…</p>
+      <input type="file" accept=".csv,.txt,.xlsx" (change)="onFileSelected($event)" />
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="assignRoundRobin" name="rr" />
+        Assign round-robin after create
+      </label>
+      <button type="button" class="btn primary" [disabled]="busy || !importFile" (click)="uploadImport()">
+        Upload
+      </button>
+      <div class="import-result" *ngIf="importResult as r">
+        <p>{{ r.created }} created · {{ r.skipped }} skipped · {{ r.totalRows }} rows</p>
+        <ul *ngIf="r.errors?.length">
+          <li *ngFor="let e of r.errors">{{ e }}</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="row between">
+      <h2>Leads <span class="muted">({{ totalLeads }})</span></h2>
+      <div class="row">
+        <input [(ngModel)]="searchQ" name="q" placeholder="Search…" (keyup.enter)="loadLeads()" />
+        <button type="button" class="btn" (click)="loadLeads()">Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Id</th>
+            <th>Title</th>
+            <th>Contact</th>
+            <th>Company</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Source</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let lead of leads">
+            <td>{{ lead.id }}</td>
+            <td>{{ lead.title }}</td>
+            <td>{{ lead.displayName || '—' }}</td>
+            <td>{{ lead.companyName || '—' }}</td>
+            <td>{{ lead.phone || '—' }}</td>
+            <td>{{ lead.email || '—' }}</td>
+            <td>{{ lead.sourceCode || '—' }}</td>
+            <td><span class="badge">{{ lead.status || 'NEW' }}</span></td>
+          </tr>
+          <tr *ngIf="!leads.length">
+            <td colspan="8" class="empty">No leads yet. Bootstrap a workspace, then create or import.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
