@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  Campaign,
+  CampaignUpsert,
   ImportResult,
   Lead,
   LeadUpsert,
@@ -190,5 +192,17 @@ export class CrmApiService {
       `${this.base}/sequences/process-due?limit=${limit}`,
       {}
     );
+  }
+
+  listCampaigns(): Observable<Campaign[]> {
+    return this.http.get<Campaign[]>(`${this.base}/campaigns`);
+  }
+
+  upsertCampaign(body: CampaignUpsert): Observable<Campaign> {
+    return this.http.post<Campaign>(`${this.base}/campaigns`, body);
+  }
+
+  publicCapture(publicKey: string, body: Record<string, unknown>): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/public/capture/${publicKey}`, body);
   }
 }

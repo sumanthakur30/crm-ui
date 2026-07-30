@@ -17,6 +17,12 @@ export interface LeadUpsert {
   attributes?: Record<string, unknown>;
   externalRefs?: Record<string, unknown>;
   formKey?: string | null;
+  campaignId?: number | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
 }
 
 export interface Lead {
@@ -37,8 +43,44 @@ export interface Lead {
   teamId?: string | null;
   amount?: number | null;
   currency?: string | null;
+  campaignId?: number | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface Campaign {
+  id: number;
+  code: string;
+  name: string;
+  status: string;
+  channel?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
+  landingUrl?: string | null;
+  publicKey: string;
+  capturePath: string;
+  createdAt?: string;
+}
+
+export interface CampaignUpsert {
+  code: string;
+  name: string;
+  status?: string | null;
+  channel?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  utmCampaign?: string | null;
+  utmContent?: string | null;
+  utmTerm?: string | null;
+  landingUrl?: string | null;
 }
 
 export interface Page<T> {

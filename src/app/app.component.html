@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 2c — Quotes · SLA · Insights · Convert</p>
+      <p class="tag">Phase 3 — Campaigns · UTM · Insights</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -33,6 +33,7 @@
         <button type="button" class="btn" [class.primary]="module === 'deals'" (click)="setModule('deals')">Deals</button>
         <button type="button" class="btn" [class.primary]="module === 'quotes'" (click)="setModule('quotes')">Quotes</button>
         <button type="button" class="btn" [class.primary]="module === 'insights'" (click)="setModule('insights')">Insights</button>
+        <button type="button" class="btn" [class.primary]="module === 'campaigns'" (click)="setModule('campaigns')">Campaigns</button>
       </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
@@ -51,6 +52,17 @@
           <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
           <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
           <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
+          <label>Campaign
+            <select [(ngModel)]="leadForm.campaignId" name="leadCamp">
+              <option [ngValue]="null">— none —</option>
+              <option *ngFor="let c of campaigns" [ngValue]="c.id">{{ c.name }}</option>
+            </select>
+          </label>
+          <div class="row wrap">
+            <label>utm_source <input [(ngModel)]="leadForm.utmSource" name="utmSrc" /></label>
+            <label>utm_medium <input [(ngModel)]="leadForm.utmMedium" name="utmMed" /></label>
+            <label>utm_campaign <input [(ngModel)]="leadForm.utmCampaign" name="utmCamp" /></label>
+          </div>
           <button type="submit" class="btn primary" [disabled]="busy">Create</button>
         </form>
       </section>
@@ -364,6 +376,26 @@
         </ul>
       </section>
       <section class="panel">
+        <h2>Campaigns</h2>
+        <ul class="member-list">
+          <li *ngFor="let row of funnelRows('campaigns')">
+            <strong>{{ row['campaignName'] }}</strong>
+            <span class="muted">{{ row['count'] }}</span>
+          </li>
+          <li *ngIf="!funnelRows('campaigns').length" class="muted">No campaign leads yet.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>UTM sources</h2>
+        <ul class="member-list">
+          <li *ngFor="let row of funnelRows('utmSources')">
+            <strong>{{ row['utmSource'] }}</strong>
+            <span class="muted">{{ row['count'] }}</span>
+          </li>
+          <li *ngIf="!funnelRows('utmSources').length" class="muted">No UTM yet.</li>
+        </ul>
+      </section>
+      <section class="panel">
         <h2>Open deal funnel</h2>
         <ul class="member-list">
           <li *ngFor="let row of funnelRows('dealFunnel')">
@@ -386,6 +418,68 @@
       </ul>
     </section>
   </ng-container>
+
+  <!-- ========== CAMPAIGNS ========== -->
+  <ng-container *ngIf="module === 'campaigns'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Create campaign</h2>
+        <form class="form" (ngSubmit)="createCampaign()">
+          <label>Code * <input required [(ngModel)]="campaignForm.code" name="cCode" placeholder="GOOGLE_JUL" /></label>
+          <label>Name * <input required [(ngModel)]="campaignForm.name" name="cName" /></label>
+          <label>Channel <input [(ngModel)]="campaignForm.channel" name="cCh" /></label>
+          <div class="row wrap">
+            <label>utm_source <input [(ngModel)]="campaignForm.utmSource" name="cUs" /></label>
+            <label>utm_medium <input [(ngModel)]="campaignForm.utmMedium" name="cUm" /></label>
+            <label>utm_campaign <input [(ngModel)]="campaignForm.utmCampaign" name="cUc" /></label>
+          </div>
+          <label>Landing URL <input [(ngModel)]="campaignForm.landingUrl" name="cLand" /></label>
+          <button type="submit" class="btn primary" [disabled]="busy">Save campaign</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Simulate public capture</h2>
+        <p class="hint">POST /api/v1/crm/public/capture/&#123;publicKey&#125; — no X-Tenant-Id.</p>
+        <form class="form" (ngSubmit)="runPublicCapture()">
+          <label>Public key
+            <select [(ngModel)]="captureDemo.publicKey" name="capKey">
+              <option *ngFor="let c of campaigns" [ngValue]="c.publicKey">{{ c.code }} · {{ c.publicKey }}</option>
+            </select>
+          </label>
+          <label>Title <input [(ngModel)]="captureDemo.title" name="capTitle" /></label>
+          <label>Phone <input [(ngModel)]="captureDemo.phone" name="capPhone" /></label>
+          <label>Email <input [(ngModel)]="captureDemo.email" name="capEmail" /></label>
+          <button type="submit" class="btn primary" [disabled]="busy || !campaigns.length">Capture lead</button>
+        </form>
+      </section>
+    </div>
+    <section class="panel">
+      <h2>Campaigns</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Name</th>
+              <th>UTM</th>
+              <th>Capture path</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of campaigns">
+              <td>{{ c.code }}</td>
+              <td>{{ c.name }} <span class="badge">{{ c.status }}</span></td>
+              <td class="muted">{{ c.utmSource }}/{{ c.utmMedium }}/{{ c.utmCampaign }}</td>
+              <td class="muted">{{ c.capturePath }}</td>
+            </tr>
+            <tr *ngIf="!campaigns.length">
+              <td colspan="4" class="empty">No campaigns yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
 </main>
 
 <!-- Lead detail drawer -->
@@ -405,6 +499,8 @@
     <div><dt>Email</dt><dd>{{ lead.email || '—' }}</dd></div>
     <div><dt>Owner</dt><dd>{{ lead.ownerUserId || 'Unassigned' }}</dd></div>
     <div><dt>Source</dt><dd>{{ lead.sourceCode || '—' }}</dd></div>
+    <div><dt>Campaign</dt><dd>{{ campaignName(lead.campaignId) }}</dd></div>
+    <div><dt>UTM</dt><dd>{{ lead.utmSource || '—' }} / {{ lead.utmMedium || '—' }} / {{ lead.utmCampaign || '—' }}</dd></div>
   </dl>
 
   <section>

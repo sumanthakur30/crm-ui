@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CrmApiService } from './core/crm-api.service';
 import { TenantService } from './core/tenant.service';
 import {
+  Campaign,
   ImportResult,
   Lead,
   Opportunity,
@@ -20,7 +21,7 @@ import {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
-  module: 'leads' | 'deals' | 'quotes' | 'insights' = 'leads';
+  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
@@ -36,6 +37,7 @@ export class AppComponent implements OnInit {
   leads: Lead[] = [];
   opportunities: Opportunity[] = [];
   quotations: Quotation[] = [];
+  campaigns: Campaign[] = [];
   totalLeads = 0;
   totalOpps = 0;
   members: TeamMember[] = [];
@@ -57,6 +59,27 @@ export class AppComponent implements OnInit {
     email: '',
     phone: '',
     sourceCode: 'WEBSITE',
+    campaignId: null as number | null,
+    utmSource: '',
+    utmMedium: '',
+    utmCampaign: '',
+  };
+
+  campaignForm = {
+    code: '',
+    name: '',
+    channel: 'PAID_SEARCH',
+    utmSource: 'google',
+    utmMedium: 'cpc',
+    utmCampaign: '',
+    landingUrl: '',
+  };
+
+  captureDemo = {
+    publicKey: '',
+    title: 'Landing page lead',
+    phone: '',
+    email: '',
   };
 
   oppForm = {
@@ -127,7 +150,7 @@ export class AppComponent implements OnInit {
     }));
   }
 
-  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights'): void {
+  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns'): void {
     this.module = m;
     this.selectedLead = null;
     this.selectedOpp = null;
@@ -138,6 +161,8 @@ export class AppComponent implements OnInit {
       this.loadOpportunities();
     } else if (m === 'insights') {
       this.loadInsights();
+    } else if (m === 'campaigns') {
+      this.loadCampaigns();
     }
   }
 
@@ -180,6 +205,7 @@ export class AppComponent implements OnInit {
     this.loadMembers();
     this.loadCurrentWorkspace();
     this.loadOpportunities();
+    this.loadCampaigns();
   }
 
   bootstrapWorkspace(): void {
@@ -317,6 +343,10 @@ export class AppComponent implements OnInit {
         email: this.leadForm.email || null,
         phone: this.leadForm.phone || null,
         sourceCode: this.leadForm.sourceCode || null,
+        campaignId: this.leadForm.campaignId,
+        utmSource: this.leadForm.utmSource || null,
+        utmMedium: this.leadForm.utmMedium || null,
+        utmCampaign: this.leadForm.utmCampaign || null,
       })
       .subscribe({
         next: (lead) => {
@@ -330,6 +360,10 @@ export class AppComponent implements OnInit {
             email: '',
             phone: '',
             sourceCode: 'WEBSITE',
+            campaignId: null,
+            utmSource: '',
+            utmMedium: '',
+            utmCampaign: '',
           };
           this.loadLeads();
           this.openLead(lead);
@@ -594,6 +628,92 @@ export class AppComponent implements OnInit {
   funnelRows(key: string): Array<Record<string, unknown>> {
     const rows = this.analytics?.[key];
     return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
+
+  loadCampaigns(): void {
+    this.api.listCampaigns().subscribe({
+      next: (list) => {
+        this.campaigns = list || [];
+        if (!this.captureDemo.publicKey && this.campaigns.length) {
+          this.captureDemo.publicKey = this.campaigns[0].publicKey;
+        }
+      },
+      error: (err) => this.setError(err, 'Failed to load campaigns'),
+    });
+  }
+
+  createCampaign(): void {
+    if (!this.campaignForm.code.trim() || !this.campaignForm.name.trim()) {
+      this.error = 'Campaign code and name required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertCampaign({
+        code: this.campaignForm.code.trim(),
+        name: this.campaignForm.name.trim(),
+        status: 'ACTIVE',
+        channel: this.campaignForm.channel || null,
+        utmSource: this.campaignForm.utmSource || null,
+        utmMedium: this.campaignForm.utmMedium || null,
+        utmCampaign: this.campaignForm.utmCampaign || this.campaignForm.code.trim().toLowerCase(),
+        landingUrl: this.campaignForm.landingUrl || null,
+      })
+      .subscribe({
+        next: (c) => {
+          this.busy = false;
+          this.message = `Campaign ${c.code} · capture ${c.capturePath}`;
+          this.captureDemo.publicKey = c.publicKey;
+          this.campaignForm = {
+            code: '',
+            name: '',
+            channel: 'PAID_SEARCH',
+            utmSource: 'google',
+            utmMedium: 'cpc',
+            utmCampaign: '',
+            landingUrl: '',
+          };
+          this.loadCampaigns();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Create campaign failed');
+        },
+      });
+  }
+
+  runPublicCapture(): void {
+    if (!this.captureDemo.publicKey.trim()) {
+      this.error = 'Pick a campaign public key';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .publicCapture(this.captureDemo.publicKey.trim(), {
+        title: this.captureDemo.title || 'Landing page lead',
+        phone: this.captureDemo.phone || null,
+        email: this.captureDemo.email || null,
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.message = `Public capture → lead #${lead.id} · utm ${lead.utmSource || '—'}`;
+          this.loadLeads();
+          this.setModule('leads');
+          this.openLead(lead);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Public capture failed');
+        },
+      });
+  }
+
+  campaignName(id?: number | null): string {
+    if (!id) {
+      return '—';
+    }
+    return this.campaigns.find((c) => c.id === id)?.name || String(id);
   }
 
   loadTimeline(leadId: number): void {
