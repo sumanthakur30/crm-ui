@@ -5,8 +5,12 @@ import {
   ImportResult,
   Lead,
   LeadUpsert,
+  Opportunity,
+  OpportunityUpsert,
   Page,
   Pipeline,
+  Quotation,
+  QuotationUpsert,
   Stage,
   StatusResponse,
   TeamMember,
@@ -23,6 +27,10 @@ export class CrmApiService {
 
   status(): Observable<StatusResponse> {
     return this.http.get<StatusResponse>(`${this.base}/status`);
+  }
+
+  listTemplates(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.base}/templates`);
   }
 
   bootstrap(body: WorkspaceBootstrapRequest = {}): Observable<Workspace> {
@@ -93,5 +101,37 @@ export class CrmApiService {
     form.append('file', file, file.name);
     const params = new HttpParams().set('assignRoundRobin', String(assignRoundRobin));
     return this.http.post<ImportResult>(`${this.base}/leads/import`, form, { params });
+  }
+
+  listOpportunities(q?: string, page = 0, size = 200): Observable<Page<Opportunity>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) {
+      params = params.set('q', q.trim());
+    }
+    return this.http.get<Page<Opportunity>>(`${this.base}/opportunities`, { params });
+  }
+
+  createOpportunity(body: OpportunityUpsert): Observable<Opportunity> {
+    return this.http.post<Opportunity>(`${this.base}/opportunities`, body);
+  }
+
+  moveOpportunityStage(id: number, stageId: number): Observable<Opportunity> {
+    return this.http.post<Opportunity>(`${this.base}/opportunities/${id}/stage/${stageId}`, {});
+  }
+
+  createQuotation(body: QuotationUpsert): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations`, body);
+  }
+
+  listQuotationsForOpportunity(opportunityId: number): Observable<Quotation[]> {
+    return this.http.get<Quotation[]>(`${this.base}/quotations/by-opportunity/${opportunityId}`);
+  }
+
+  sendQuotation(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/send`, {});
+  }
+
+  acceptQuotation(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/accept`, {});
   }
 }

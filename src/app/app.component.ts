@@ -4,7 +4,9 @@ import { TenantService } from './core/tenant.service';
 import {
   ImportResult,
   Lead,
+  Opportunity,
   Pipeline,
+  Quotation,
   Stage,
   TeamMember,
   TimelineItem,
@@ -18,21 +20,29 @@ import {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
+  module: 'leads' | 'deals' | 'quotes' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
   workspaceName = 'Demo Workspace';
   templateCode = 'GENERIC';
+  templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
   searchQ = '';
 
   workspace: Workspace | null = null;
   pipelines: Pipeline[] = [];
   stages: Stage[] = [];
+  dealStages: Stage[] = [];
   leads: Lead[] = [];
+  opportunities: Opportunity[] = [];
+  quotations: Quotation[] = [];
   totalLeads = 0;
+  totalOpps = 0;
   members: TeamMember[] = [];
 
   selectedLead: Lead | null = null;
+  selectedOpp: Opportunity | null = null;
+  selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
   noteDraft = '';
   assignMode: 'ROUND_ROBIN' | 'MANUAL' = 'ROUND_ROBIN';
@@ -47,6 +57,28 @@ export class AppComponent implements OnInit {
     email: '',
     phone: '',
     sourceCode: 'WEBSITE',
+  };
+
+  oppForm = {
+    name: '',
+    amount: null as number | null,
+    currency: 'INR',
+    leadId: null as number | null,
+  };
+
+  quoteForm = {
+    opportunityId: null as number | null,
+    customerName: '',
+    customerGstin: '',
+    placeOfSupply: 'KA',
+    sellerStateCode: '29',
+    buyerStateCode: '29',
+    terms: 'Payment due within 15 days.',
+    lineDescription: 'Professional services',
+    hsn: '9983',
+    qty: 1,
+    unitPrice: 10000,
+    gstRate: 18,
   };
 
   importFile: File | null = null;
@@ -66,6 +98,7 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.refreshStatus();
+    this.loadTemplates();
     this.reloadAll();
   }
 
@@ -76,12 +109,33 @@ export class AppComponent implements OnInit {
     }));
   }
 
+  get dealKanbanColumns(): { stage: Stage; opps: Opportunity[] }[] {
+    return this.dealStages.map((stage) => ({
+      stage,
+      opps: this.opportunities.filter((o) => o.stageId === stage.id),
+    }));
+  }
+
+  setModule(m: 'leads' | 'deals' | 'quotes'): void {
+    this.module = m;
+    this.selectedLead = null;
+    this.selectedOpp = null;
+    this.selectedQuote = null;
+    if (m === 'deals') {
+      this.loadOpportunities();
+    } else if (m === 'quotes') {
+      this.loadOpportunities();
+    }
+  }
+
   saveTenant(): void {
     this.tenant.setTenantId(this.tenantDraft);
     this.message = `Tenant set to ${this.tenant.tenantId}`;
     this.error = '';
     this.workspace = null;
     this.selectedLead = null;
+    this.selectedOpp = null;
+    this.selectedQuote = null;
     this.reloadAll();
   }
 
@@ -95,10 +149,24 @@ export class AppComponent implements OnInit {
     });
   }
 
+  loadTemplates(): void {
+    this.api.listTemplates().subscribe({
+      next: (codes) => {
+        if (codes?.length) {
+          this.templates = codes;
+        }
+      },
+      error: () => {
+        /* keep defaults */
+      },
+    });
+  }
+
   reloadAll(): void {
     this.loadLeads();
     this.loadMembers();
     this.loadCurrentWorkspace();
+    this.loadOpportunities();
   }
 
   bootstrapWorkspace(): void {
@@ -111,11 +179,12 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: (ws) => {
           this.workspace = ws;
-          this.message = `Workspace ready: ${ws.name}`;
+          this.message = `Workspace ready: ${ws.name} (${ws.templateCode || this.templateCode})`;
           this.error = '';
           this.busy = false;
           this.loadPipelinesAndStages(ws.defaultPipelineId);
           this.loadLeads();
+          this.loadOpportunities();
         },
         error: (err) => {
           this.busy = false;
@@ -128,6 +197,7 @@ export class AppComponent implements OnInit {
     this.api.currentWorkspace().subscribe({
       next: (ws) => {
         this.workspace = ws;
+        this.templateCode = ws.templateCode || this.templateCode;
         this.loadPipelinesAndStages(ws.defaultPipelineId);
       },
       error: () => {
@@ -140,24 +210,41 @@ export class AppComponent implements OnInit {
     this.api.listPipelines().subscribe({
       next: (pipes) => {
         this.pipelines = pipes || [];
-        const pipelineId =
-          defaultPipelineId ||
-          this.pipelines.find((p) => p.isDefault)?.id ||
-          this.pipelines[0]?.id;
-        if (!pipelineId) {
+        const leadPipe =
+          this.pipelines.find((p) => (p.objectType || '').toUpperCase() === 'LEAD' && p.isDefault) ||
+          this.pipelines.find((p) => (p.objectType || '').toUpperCase() === 'LEAD') ||
+          this.pipelines.find((p) => p.id === defaultPipelineId) ||
+          this.pipelines[0];
+        const dealPipe =
+          this.pipelines.find((p) => (p.objectType || '').toUpperCase() === 'OPPORTUNITY' && p.isDefault) ||
+          this.pipelines.find((p) => (p.objectType || '').toUpperCase() === 'OPPORTUNITY');
+
+        if (leadPipe?.id) {
+          this.api.listStages(leadPipe.id).subscribe({
+            next: (stages) => {
+              this.stages = (stages || []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+            },
+            error: (err) => this.setError(err, 'Failed to load lead stages'),
+          });
+        } else {
           this.stages = [];
-          return;
         }
-        this.api.listStages(pipelineId).subscribe({
-          next: (stages) => {
-            this.stages = (stages || []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
-          },
-          error: (err) => this.setError(err, 'Failed to load stages'),
-        });
+
+        if (dealPipe?.id) {
+          this.api.listStages(dealPipe.id).subscribe({
+            next: (stages) => {
+              this.dealStages = (stages || []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
+            },
+            error: (err) => this.setError(err, 'Failed to load deal stages'),
+          });
+        } else {
+          this.dealStages = [];
+        }
       },
       error: () => {
         this.pipelines = [];
         this.stages = [];
+        this.dealStages = [];
       },
     });
   }
@@ -176,6 +263,23 @@ export class AppComponent implements OnInit {
         }
       },
       error: (err) => this.setError(err, 'Failed to load leads'),
+    });
+  }
+
+  loadOpportunities(): void {
+    this.api.listOpportunities(this.searchQ).subscribe({
+      next: (page) => {
+        this.opportunities = page.content || [];
+        this.totalOpps = page.totalElements ?? this.opportunities.length;
+        if (this.selectedOpp) {
+          const fresh = this.opportunities.find((o) => o.id === this.selectedOpp!.id);
+          if (fresh) {
+            this.selectedOpp = fresh;
+            this.loadQuotesForOpp(fresh.id);
+          }
+        }
+      },
+      error: (err) => this.setError(err, 'Failed to load opportunities'),
     });
   }
 
@@ -224,8 +328,95 @@ export class AppComponent implements OnInit {
       });
   }
 
+  createOpportunity(fromLead?: Lead): void {
+    const name =
+      fromLead?.title?.trim() ||
+      this.oppForm.name.trim() ||
+      (fromLead ? `Deal: ${fromLead.title}` : '');
+    if (!name) {
+      this.error = 'Opportunity name is required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .createOpportunity({
+        name,
+        leadId: fromLead?.id ?? this.oppForm.leadId,
+        amount: this.oppForm.amount,
+        currency: this.oppForm.currency || 'INR',
+      })
+      .subscribe({
+        next: (opp) => {
+          this.busy = false;
+          this.message = `Opportunity #${opp.id} created`;
+          this.error = '';
+          this.oppForm = { name: '', amount: null, currency: 'INR', leadId: null };
+          this.loadOpportunities();
+          this.setModule('deals');
+          this.openOpp(opp);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Create opportunity failed');
+        },
+      });
+  }
+
+  createQuotation(): void {
+    const oppId = this.quoteForm.opportunityId || this.selectedOpp?.id;
+    if (!oppId) {
+      this.error = 'Select an opportunity for the quotation';
+      return;
+    }
+    if (!this.quoteForm.lineDescription.trim()) {
+      this.error = 'Line description is required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .createQuotation({
+        opportunityId: oppId,
+        customerName: this.quoteForm.customerName || null,
+        customerGstin: this.quoteForm.customerGstin || null,
+        placeOfSupply: this.quoteForm.placeOfSupply || null,
+        sellerStateCode: this.quoteForm.sellerStateCode || null,
+        buyerStateCode: this.quoteForm.buyerStateCode || null,
+        currency: 'INR',
+        terms: this.quoteForm.terms || null,
+        lines: [
+          {
+            description: this.quoteForm.lineDescription.trim(),
+            hsn: this.quoteForm.hsn || null,
+            qty: Number(this.quoteForm.qty) || 1,
+            unitPrice: Number(this.quoteForm.unitPrice) || 0,
+            gstRate: Number(this.quoteForm.gstRate) || 0,
+          },
+        ],
+      })
+      .subscribe({
+        next: (q) => {
+          this.busy = false;
+          this.message = `Quote ${q.quoteNumber} · total ₹${q.totalAmount}`;
+          this.error = '';
+          this.selectedQuote = q;
+          this.setModule('quotes');
+          if (this.selectedOpp) {
+            this.loadQuotesForOpp(this.selectedOpp.id);
+          } else {
+            this.quotations = [q];
+          }
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Create quotation failed');
+        },
+      });
+  }
+
   openLead(lead: Lead): void {
     this.selectedLead = lead;
+    this.selectedOpp = null;
+    this.selectedQuote = null;
     this.noteDraft = '';
     this.loadTimeline(lead.id);
   }
@@ -233,6 +424,63 @@ export class AppComponent implements OnInit {
   closeLead(): void {
     this.selectedLead = null;
     this.timeline = [];
+  }
+
+  openOpp(opp: Opportunity): void {
+    this.selectedOpp = opp;
+    this.selectedLead = null;
+    this.selectedQuote = null;
+    this.quoteForm.opportunityId = opp.id;
+    this.loadQuotesForOpp(opp.id);
+  }
+
+  closeOpp(): void {
+    this.selectedOpp = null;
+    this.quotations = [];
+  }
+
+  loadQuotesForOpp(opportunityId: number): void {
+    this.api.listQuotationsForOpportunity(opportunityId).subscribe({
+      next: (list) => (this.quotations = list || []),
+      error: () => (this.quotations = []),
+    });
+  }
+
+  openQuote(q: Quotation): void {
+    this.selectedQuote = q;
+  }
+
+  sendQuote(q: Quotation): void {
+    this.busy = true;
+    this.api.sendQuotation(q.id).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.selectedQuote = updated;
+        this.message = `Quote ${updated.quoteNumber} marked SENT`;
+        this.loadQuotesForOpp(updated.opportunityId);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Send failed');
+      },
+    });
+  }
+
+  acceptQuote(q: Quotation): void {
+    this.busy = true;
+    this.api.acceptQuotation(q.id).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.selectedQuote = updated;
+        this.message = `Quote ${updated.quoteNumber} accepted`;
+        this.loadQuotesForOpp(updated.opportunityId);
+        this.loadOpportunities();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Accept failed');
+      },
+    });
   }
 
   loadTimeline(leadId: number): void {
@@ -278,6 +526,27 @@ export class AppComponent implements OnInit {
       error: (err) => {
         this.busy = false;
         this.setError(err, 'Move stage failed');
+      },
+    });
+  }
+
+  moveOpp(opp: Opportunity, stageId: number): void {
+    if (opp.stageId === stageId) {
+      return;
+    }
+    this.busy = true;
+    this.api.moveOpportunityStage(opp.id, stageId).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.message = `Deal moved · ${updated.status}`;
+        this.loadOpportunities();
+        if (this.selectedOpp?.id === updated.id) {
+          this.openOpp(updated);
+        }
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Move deal stage failed');
       },
     });
   }
@@ -359,7 +628,19 @@ export class AppComponent implements OnInit {
   }
 
   stageName(stageId?: number | null): string {
-    return this.stages.find((s) => s.id === stageId)?.name || String(stageId ?? '—');
+    return (
+      this.stages.find((s) => s.id === stageId)?.name ||
+      this.dealStages.find((s) => s.id === stageId)?.name ||
+      String(stageId ?? '—')
+    );
+  }
+
+  shareText(q: Quotation | null): string {
+    const payload = q?.sharePayload;
+    if (!payload) {
+      return '';
+    }
+    return String(payload['whatsappText'] || payload['emailText'] || JSON.stringify(payload, null, 2));
   }
 
   private setError(err: unknown, fallback: string): void {

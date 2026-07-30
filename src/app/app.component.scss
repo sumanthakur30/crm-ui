@@ -122,8 +122,11 @@ label {
 
 input[type='text'],
 input[type='email'],
+input[type='number'],
 input:not([type]),
-input[type='search'] {
+input[type='search'],
+select,
+textarea {
   border: 1px solid #c5d0db;
   border-radius: 0.4rem;
   padding: 0.45rem 0.55rem;
@@ -327,6 +330,24 @@ code {
 
 .wrap {
   flex-wrap: wrap;
+}
+
+.module-tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+pre.share {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  background: #f0f4f8;
+  border: 1px solid #d5dde6;
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  max-height: 14rem;
+  overflow: auto;
 }
 
 .view-toggle {

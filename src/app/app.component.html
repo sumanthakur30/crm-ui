@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 1 — Kanban · detail · assignment</p>
+      <p class="tag">Phase 2 — Leads · Deals · GST Quotes</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -14,7 +14,7 @@
   </div>
 </header>
 
-<main class="layout" [class.drawer-open]="!!selectedLead">
+<main class="layout" [class.drawer-open]="!!selectedLead || !!selectedOpp">
   <p class="flash ok" *ngIf="message">{{ message }}</p>
   <p class="flash err" *ngIf="error">{{ error }}</p>
 
@@ -22,138 +22,292 @@
     <div class="row between wrap">
       <div class="row wrap">
         <input [(ngModel)]="workspaceName" name="wsName" placeholder="Workspace name" />
-        <input [(ngModel)]="templateCode" name="template" placeholder="GENERIC" />
+        <select [(ngModel)]="templateCode" name="template">
+          <option *ngFor="let t of templates" [ngValue]="t">{{ t }}</option>
+        </select>
         <button type="button" class="btn primary" [disabled]="busy" (click)="bootstrapWorkspace()">Bootstrap</button>
         <button type="button" class="btn ghost" (click)="reloadAll()">Refresh</button>
       </div>
-      <div class="view-toggle">
-        <button type="button" class="btn" [class.primary]="view === 'kanban'" (click)="view = 'kanban'">Kanban</button>
-        <button type="button" class="btn" [class.primary]="view === 'list'" (click)="view = 'list'">List</button>
-      </div>
+      <nav class="module-tabs">
+        <button type="button" class="btn" [class.primary]="module === 'leads'" (click)="setModule('leads')">Leads</button>
+        <button type="button" class="btn" [class.primary]="module === 'deals'" (click)="setModule('deals')">Deals</button>
+        <button type="button" class="btn" [class.primary]="module === 'quotes'" (click)="setModule('quotes')">Quotes</button>
+      </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
-      {{ ws.name }} · pipeline {{ ws.defaultPipelineId }} · {{ totalLeads }} leads
+      {{ ws.name }} · template {{ ws.templateCode || '—' }} · {{ totalLeads }} leads · {{ totalOpps }} deals
     </p>
   </section>
 
-  <div class="grid-3">
-    <section class="panel">
-      <h2>Create lead</h2>
-      <form class="form" (ngSubmit)="createLead()">
-        <label>Title * <input required [(ngModel)]="leadForm.title" name="title" /></label>
-        <label>Contact <input [(ngModel)]="leadForm.displayName" name="displayName" /></label>
-        <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
-        <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
-        <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
-        <button type="submit" class="btn primary" [disabled]="busy">Create</button>
-      </form>
-    </section>
+  <!-- ========== LEADS ========== -->
+  <ng-container *ngIf="module === 'leads'">
+    <div class="grid-3">
+      <section class="panel">
+        <h2>Create lead</h2>
+        <form class="form" (ngSubmit)="createLead()">
+          <label>Title * <input required [(ngModel)]="leadForm.title" name="title" /></label>
+          <label>Contact <input [(ngModel)]="leadForm.displayName" name="displayName" /></label>
+          <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
+          <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
+          <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
+          <button type="submit" class="btn primary" [disabled]="busy">Create</button>
+        </form>
+      </section>
 
-    <section class="panel">
-      <h2>Import</h2>
-      <input type="file" accept=".csv,.txt,.xlsx" (change)="onFileSelected($event)" />
-      <label class="check">
-        <input type="checkbox" [(ngModel)]="assignRoundRobin" name="rr" />
-        Round-robin after import
-      </label>
-      <button type="button" class="btn primary" [disabled]="busy || !importFile" (click)="uploadImport()">Upload</button>
-      <p class="hint" *ngIf="importResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
-    </section>
+      <section class="panel">
+        <h2>Import</h2>
+        <input type="file" accept=".csv,.txt,.xlsx" (change)="onFileSelected($event)" />
+        <label class="check">
+          <input type="checkbox" [(ngModel)]="assignRoundRobin" name="rr" />
+          Round-robin after import
+        </label>
+        <button type="button" class="btn primary" [disabled]="busy || !importFile" (click)="uploadImport()">Upload</button>
+        <p class="hint" *ngIf="importResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
+      </section>
 
-    <section class="panel">
-      <h2>Team (round-robin)</h2>
-      <form class="form row wrap" (ngSubmit)="addMember()">
-        <input [(ngModel)]="memberForm.userId" name="uid" placeholder="userId" required />
-        <input [(ngModel)]="memberForm.displayName" name="dname" placeholder="Display name" />
-        <button type="submit" class="btn">Add</button>
-      </form>
-      <ul class="member-list">
-        <li *ngFor="let m of members">
-          <strong>{{ m.displayName || m.userId }}</strong>
-          <span class="muted">{{ m.userId }}</span>
-        </li>
-        <li *ngIf="!members.length" class="muted">Add sales users for ROUND_ROBIN.</li>
-      </ul>
-    </section>
-  </div>
-
-  <!-- Kanban -->
-  <section class="panel" *ngIf="view === 'kanban'">
-    <div class="row between">
-      <h2>Pipeline board</h2>
-      <div class="row">
-        <input [(ngModel)]="searchQ" name="q" placeholder="Search…" (keyup.enter)="loadLeads()" />
-        <button type="button" class="btn" (click)="loadLeads()">Search</button>
-      </div>
+      <section class="panel">
+        <h2>Team (round-robin)</h2>
+        <form class="form row wrap" (ngSubmit)="addMember()">
+          <input [(ngModel)]="memberForm.userId" name="uid" placeholder="userId" required />
+          <input [(ngModel)]="memberForm.displayName" name="dname" placeholder="Display name" />
+          <button type="submit" class="btn">Add</button>
+        </form>
+        <ul class="member-list">
+          <li *ngFor="let m of members">
+            <strong>{{ m.displayName || m.userId }}</strong>
+            <span class="muted">{{ m.userId }}</span>
+          </li>
+          <li *ngIf="!members.length" class="muted">Add sales users for ROUND_ROBIN.</li>
+        </ul>
+      </section>
     </div>
-    <div class="kanban" *ngIf="stages.length; else noStages">
-      <div class="column" *ngFor="let col of kanbanColumns">
-        <header>
-          <h3>{{ col.stage.name }}</h3>
-          <span class="count">{{ col.leads.length }}</span>
-        </header>
-        <article
-          class="card"
-          *ngFor="let lead of col.leads"
-          (click)="openLead(lead)"
-          [class.active]="selectedLead?.id === lead.id"
-        >
-          <strong>{{ lead.title }}</strong>
-          <p>{{ lead.displayName || lead.companyName || '—' }}</p>
-          <p class="muted">{{ lead.ownerUserId || 'Unassigned' }}</p>
-          <div class="move" (click)="$event.stopPropagation()">
-            <select
-              [ngModel]="lead.stageId"
-              (ngModelChange)="moveLead(lead, +$event)"
-              [name]="'stage-' + lead.id"
-            >
-              <option *ngFor="let s of stages" [ngValue]="s.id">{{ s.name }}</option>
-            </select>
+
+    <section class="panel">
+      <div class="row between wrap">
+        <div class="row wrap">
+          <h2>Pipeline board</h2>
+          <div class="view-toggle">
+            <button type="button" class="btn" [class.primary]="view === 'kanban'" (click)="view = 'kanban'">Kanban</button>
+            <button type="button" class="btn" [class.primary]="view === 'list'" (click)="view = 'list'">List</button>
           </div>
-        </article>
-        <p class="empty" *ngIf="!col.leads.length">Empty</p>
+        </div>
+        <div class="row">
+          <input [(ngModel)]="searchQ" name="q" placeholder="Search…" (keyup.enter)="loadLeads()" />
+          <button type="button" class="btn" (click)="loadLeads()">Search</button>
+        </div>
       </div>
-    </div>
-    <ng-template #noStages>
-      <p class="hint">Bootstrap a workspace to create the Sales pipeline stages.</p>
-    </ng-template>
-  </section>
 
-  <!-- List -->
-  <section class="panel" *ngIf="view === 'list'">
-    <div class="row between">
-      <h2>Leads <span class="muted">({{ totalLeads }})</span></h2>
-      <div class="row">
-        <input [(ngModel)]="searchQ" name="q2" placeholder="Search…" (keyup.enter)="loadLeads()" />
-        <button type="button" class="btn" (click)="loadLeads()">Refresh</button>
+      <div class="kanban" *ngIf="view === 'kanban' && stages.length; else leadFallback">
+        <div class="column" *ngFor="let col of kanbanColumns">
+          <header>
+            <h3>{{ col.stage.name }}</h3>
+            <span class="count">{{ col.leads.length }}</span>
+          </header>
+          <article
+            class="card"
+            *ngFor="let lead of col.leads"
+            (click)="openLead(lead)"
+            [class.active]="selectedLead?.id === lead.id"
+          >
+            <strong>{{ lead.title }}</strong>
+            <p>{{ lead.displayName || lead.companyName || '—' }}</p>
+            <p class="muted">{{ lead.ownerUserId || 'Unassigned' }}</p>
+            <div class="move" (click)="$event.stopPropagation()">
+              <select
+                [ngModel]="lead.stageId"
+                (ngModelChange)="moveLead(lead, +$event)"
+                [name]="'stage-' + lead.id"
+              >
+                <option *ngFor="let s of stages" [ngValue]="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+          </article>
+          <p class="empty" *ngIf="!col.leads.length">Empty</p>
+        </div>
       </div>
+
+      <ng-template #leadFallback>
+        <div class="table-wrap" *ngIf="view === 'list'; else noLeadStages">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Stage</th>
+                <th>Owner</th>
+                <th>Phone</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let lead of leads" (click)="openLead(lead)" class="clickable">
+                <td>{{ lead.title }}</td>
+                <td>{{ stageName(lead.stageId) }}</td>
+                <td>{{ lead.ownerUserId || '—' }}</td>
+                <td>{{ lead.phone || '—' }}</td>
+                <td><span class="badge">{{ lead.status }}</span></td>
+              </tr>
+              <tr *ngIf="!leads.length">
+                <td colspan="5" class="empty">No leads yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ng-template #noLeadStages>
+          <p class="hint" *ngIf="view === 'kanban'">Bootstrap a workspace to create lead pipeline stages.</p>
+        </ng-template>
+      </ng-template>
+    </section>
+  </ng-container>
+
+  <!-- ========== DEALS ========== -->
+  <ng-container *ngIf="module === 'deals'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Create opportunity</h2>
+        <form class="form" (ngSubmit)="createOpportunity()">
+          <label>Name * <input required [(ngModel)]="oppForm.name" name="oppName" /></label>
+          <label>Amount
+            <input type="number" [(ngModel)]="oppForm.amount" name="oppAmt" />
+          </label>
+          <label>Currency <input [(ngModel)]="oppForm.currency" name="oppCur" /></label>
+          <label>From lead
+            <select [(ngModel)]="oppForm.leadId" name="oppLead">
+              <option [ngValue]="null">— optional —</option>
+              <option *ngFor="let l of leads" [ngValue]="l.id">#{{ l.id }} {{ l.title }}</option>
+            </select>
+          </label>
+          <button type="submit" class="btn primary" [disabled]="busy">Create deal</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Deal pipeline</h2>
+        <p class="hint">Stages come from the industry template (DEALS / OPPORTUNITY pipeline).</p>
+        <div class="row">
+          <input [(ngModel)]="searchQ" name="oq" placeholder="Search deals…" (keyup.enter)="loadOpportunities()" />
+          <button type="button" class="btn" (click)="loadOpportunities()">Search</button>
+        </div>
+      </section>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Stage</th>
-            <th>Owner</th>
-            <th>Phone</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let lead of leads" (click)="openLead(lead)" class="clickable">
-            <td>{{ lead.title }}</td>
-            <td>{{ stageName(lead.stageId) }}</td>
-            <td>{{ lead.ownerUserId || '—' }}</td>
-            <td>{{ lead.phone || '—' }}</td>
-            <td><span class="badge">{{ lead.status }}</span></td>
-          </tr>
-          <tr *ngIf="!leads.length">
-            <td colspan="5" class="empty">No leads yet.</td>
-          </tr>
-        </tbody>
-      </table>
+
+    <section class="panel">
+      <h2>Deal board <span class="muted">({{ totalOpps }})</span></h2>
+      <div class="kanban" *ngIf="dealStages.length; else noDealStages">
+        <div class="column" *ngFor="let col of dealKanbanColumns">
+          <header>
+            <h3>{{ col.stage.name }}</h3>
+            <span class="count">{{ col.opps.length }}</span>
+          </header>
+          <article
+            class="card"
+            *ngFor="let opp of col.opps"
+            (click)="openOpp(opp)"
+            [class.active]="selectedOpp?.id === opp.id"
+          >
+            <strong>{{ opp.name }}</strong>
+            <p>{{ opp.currency || 'INR' }} {{ opp.amount ?? '—' }} · {{ opp.probability }}%</p>
+            <p class="muted">{{ opp.status }} · lead {{ opp.leadId || '—' }}</p>
+            <div class="move" (click)="$event.stopPropagation()">
+              <select
+                [ngModel]="opp.stageId"
+                (ngModelChange)="moveOpp(opp, +$event)"
+                [name]="'opp-stage-' + opp.id"
+              >
+                <option *ngFor="let s of dealStages" [ngValue]="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+          </article>
+          <p class="empty" *ngIf="!col.opps.length">Empty</p>
+        </div>
+      </div>
+      <ng-template #noDealStages>
+        <p class="hint">Bootstrap (or re-bootstrap) with a template to seed the deal pipeline.</p>
+      </ng-template>
+    </section>
+  </ng-container>
+
+  <!-- ========== QUOTES ========== -->
+  <ng-container *ngIf="module === 'quotes'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>New GST quotation</h2>
+        <form class="form" (ngSubmit)="createQuotation()">
+          <label>Opportunity *
+            <select required [(ngModel)]="quoteForm.opportunityId" name="qOpp">
+              <option [ngValue]="null" disabled>Select deal</option>
+              <option *ngFor="let o of opportunities" [ngValue]="o.id">#{{ o.id }} {{ o.name }}</option>
+            </select>
+          </label>
+          <label>Customer <input [(ngModel)]="quoteForm.customerName" name="qCust" /></label>
+          <label>GSTIN <input [(ngModel)]="quoteForm.customerGstin" name="qGstin" /></label>
+          <div class="row wrap">
+            <label>Seller state <input [(ngModel)]="quoteForm.sellerStateCode" name="qSell" placeholder="29" /></label>
+            <label>Buyer state <input [(ngModel)]="quoteForm.buyerStateCode" name="qBuy" placeholder="29" /></label>
+            <label>POS <input [(ngModel)]="quoteForm.placeOfSupply" name="qPos" placeholder="KA" /></label>
+          </div>
+          <label>Line description * <input required [(ngModel)]="quoteForm.lineDescription" name="qDesc" /></label>
+          <div class="row wrap">
+            <label>HSN <input [(ngModel)]="quoteForm.hsn" name="qHsn" /></label>
+            <label>Qty <input type="number" [(ngModel)]="quoteForm.qty" name="qQty" /></label>
+            <label>Unit ₹ <input type="number" [(ngModel)]="quoteForm.unitPrice" name="qPrice" /></label>
+            <label>GST % <input type="number" [(ngModel)]="quoteForm.gstRate" name="qGst" /></label>
+          </div>
+          <label>Terms <textarea [(ngModel)]="quoteForm.terms" name="qTerms" rows="2"></textarea></label>
+          <p class="hint">Same seller/buyer state → CGST+SGST; different → IGST.</p>
+          <button type="submit" class="btn primary" [disabled]="busy">Create quote</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Share / status</h2>
+        <ng-container *ngIf="selectedQuote as q; else pickQuote">
+          <p>
+            <strong>{{ q.quoteNumber }}</strong>
+            <span class="badge">{{ q.status }}</span>
+          </p>
+          <dl class="meta">
+            <div><dt>Taxable</dt><dd>₹{{ q.taxableAmount }}</dd></div>
+            <div><dt>CGST</dt><dd>₹{{ q.cgstAmount }}</dd></div>
+            <div><dt>SGST</dt><dd>₹{{ q.sgstAmount }}</dd></div>
+            <div><dt>IGST</dt><dd>₹{{ q.igstAmount }}</dd></div>
+            <div><dt>Total</dt><dd><strong>₹{{ q.totalAmount }}</strong></dd></div>
+          </dl>
+          <div class="row wrap">
+            <button type="button" class="btn" [disabled]="busy" (click)="sendQuote(q)">Mark sent</button>
+            <button type="button" class="btn primary" [disabled]="busy" (click)="acceptQuote(q)">Accept</button>
+          </div>
+          <h3>Share text</h3>
+          <pre class="share">{{ shareText(q) }}</pre>
+        </ng-container>
+        <ng-template #pickQuote>
+          <p class="hint">Create a quote or open one from a deal drawer.</p>
+        </ng-template>
+      </section>
     </div>
-  </section>
+
+    <section class="panel" *ngIf="quotations.length">
+      <h2>Quotes for selected deal</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Number</th>
+              <th>Status</th>
+              <th>Total</th>
+              <th>CGST/SGST/IGST</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let q of quotations" class="clickable" (click)="openQuote(q)">
+              <td>{{ q.quoteNumber }}</td>
+              <td><span class="badge">{{ q.status }}</span></td>
+              <td>₹{{ q.totalAmount }}</td>
+              <td class="muted">{{ q.cgstAmount }} / {{ q.sgstAmount }} / {{ q.igstAmount }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
 </main>
 
 <!-- Lead detail drawer -->
@@ -174,6 +328,11 @@
     <div><dt>Owner</dt><dd>{{ lead.ownerUserId || 'Unassigned' }}</dd></div>
     <div><dt>Source</dt><dd>{{ lead.sourceCode || '—' }}</dd></div>
   </dl>
+
+  <section>
+    <h3>Convert to deal</h3>
+    <button type="button" class="btn primary" [disabled]="busy" (click)="createOpportunity(lead)">Create opportunity</button>
+  </section>
 
   <section>
     <h3>Move stage</h3>
@@ -207,6 +366,44 @@
         <p>{{ item.summary }}</p>
       </li>
       <li *ngIf="!timeline.length" class="muted">No timeline yet.</li>
+    </ul>
+  </section>
+</aside>
+
+<!-- Opportunity drawer -->
+<aside class="drawer" *ngIf="selectedOpp as opp">
+  <div class="drawer-head">
+    <div>
+      <h2>{{ opp.name }}</h2>
+      <p class="muted">#{{ opp.id }} · {{ stageName(opp.stageId) }} · {{ opp.status }}</p>
+    </div>
+    <button type="button" class="btn ghost" (click)="closeOpp()">Close</button>
+  </div>
+
+  <dl class="meta">
+    <div><dt>Amount</dt><dd>{{ opp.currency }} {{ opp.amount ?? '—' }}</dd></div>
+    <div><dt>Probability</dt><dd>{{ opp.probability }}%</dd></div>
+    <div><dt>Lead</dt><dd>{{ opp.leadId || '—' }}</dd></div>
+    <div><dt>Owner</dt><dd>{{ opp.ownerUserId || '—' }}</dd></div>
+  </dl>
+
+  <section>
+    <h3>Move stage</h3>
+    <select class="full" [ngModel]="opp.stageId" (ngModelChange)="moveOpp(opp, +$event)" name="oppDrawerStage">
+      <option *ngFor="let s of dealStages" [ngValue]="s.id">{{ s.name }}</option>
+    </select>
+  </section>
+
+  <section>
+    <h3>Quotations</h3>
+    <button type="button" class="btn primary" (click)="quoteForm.opportunityId = opp.id; setModule('quotes')">New quote</button>
+    <ul class="member-list">
+      <li *ngFor="let q of quotations" class="clickable" (click)="openQuote(q); setModule('quotes')">
+        <strong>{{ q.quoteNumber }}</strong>
+        <span class="badge">{{ q.status }}</span>
+        <span class="muted">₹{{ q.totalAmount }}</span>
+      </li>
+      <li *ngIf="!quotations.length" class="muted">No quotes yet.</li>
     </ul>
   </section>
 </aside>
