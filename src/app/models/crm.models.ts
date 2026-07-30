@@ -196,4 +196,10 @@ export interface Quotation {
   validUntil?: string | null;
   acceptedAt?: string | null;
   createdAt?: string;
+  paymentLinkUrl?: string | null;
+  paymentStatus?: string | null;
+  paymentProvider?: string | null;
+  paymentRef?: string | null;
+  paymentAmount?: number | null;
+  paidAt?: string | null;
 }

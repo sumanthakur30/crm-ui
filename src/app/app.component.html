@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 2 — Leads · Deals · GST Quotes</p>
+      <p class="tag">Phase 2c — Quotes · SLA · Insights · Convert</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -32,6 +32,7 @@
         <button type="button" class="btn" [class.primary]="module === 'leads'" (click)="setModule('leads')">Leads</button>
         <button type="button" class="btn" [class.primary]="module === 'deals'" (click)="setModule('deals')">Deals</button>
         <button type="button" class="btn" [class.primary]="module === 'quotes'" (click)="setModule('quotes')">Quotes</button>
+        <button type="button" class="btn" [class.primary]="module === 'insights'" (click)="setModule('insights')">Insights</button>
       </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
@@ -286,8 +287,12 @@
           </div>
           <div class="row wrap">
             <button type="button" class="btn" [disabled]="busy" (click)="sendQuote(q)">Send / mark sent</button>
+            <button type="button" class="btn" [disabled]="busy" (click)="createPaymentLink(q)">Payment link</button>
+            <button type="button" class="btn" [disabled]="busy" (click)="markPaid(q)">Mark paid</button>
+            <button type="button" class="btn" (click)="openPdf(q)">PDF</button>
             <button type="button" class="btn primary" [disabled]="busy" (click)="acceptQuote(q)">Accept</button>
           </div>
+          <p class="hint" *ngIf="q.paymentLinkUrl">Pay: {{ q.paymentLinkUrl }} · {{ q.paymentStatus }}</p>
           <p class="hint">Enable with CRM_NOTIFICATION_ENABLED=true and notification-service on :8087.</p>
           <h3>Share text</h3>
           <pre class="share">{{ shareText(q) }}</pre>
@@ -322,6 +327,65 @@
       </div>
     </section>
   </ng-container>
+
+  <!-- ========== INSIGHTS ========== -->
+  <ng-container *ngIf="module === 'insights'">
+    <section class="panel compact">
+      <div class="row between wrap">
+        <h2>Dashboard</h2>
+        <div class="row wrap">
+          <button type="button" class="btn" (click)="loadInsights()">Refresh</button>
+          <button type="button" class="btn primary" (click)="processSla()">Process SLA aging</button>
+        </div>
+      </div>
+      <p class="hint" *ngIf="analytics as a">
+        Open deals {{ a['openDeals'] }} · Won {{ a['wonDeals'] }} · Lost {{ a['lostDeals'] }} · Overdue tasks {{ a['overdueTasks'] }}
+      </p>
+    </section>
+    <div class="grid-3">
+      <section class="panel">
+        <h2>Lead funnel</h2>
+        <ul class="member-list">
+          <li *ngFor="let row of funnelRows('leadFunnel')">
+            <strong>{{ row['stageName'] }}</strong>
+            <span class="muted">{{ row['count'] }}</span>
+          </li>
+          <li *ngIf="!funnelRows('leadFunnel').length" class="muted">No lead data.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Lead sources</h2>
+        <ul class="member-list">
+          <li *ngFor="let row of funnelRows('leadSources')">
+            <strong>{{ row['sourceCode'] }}</strong>
+            <span class="muted">{{ row['count'] }}</span>
+          </li>
+          <li *ngIf="!funnelRows('leadSources').length" class="muted">No sources yet.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Open deal funnel</h2>
+        <ul class="member-list">
+          <li *ngFor="let row of funnelRows('dealFunnel')">
+            <strong>{{ row['stageName'] }}</strong>
+            <span class="muted">{{ row['count'] }} · ₹{{ row['amount'] }}</span>
+          </li>
+          <li *ngIf="!funnelRows('dealFunnel').length" class="muted">No open deals.</li>
+        </ul>
+      </section>
+    </div>
+    <section class="panel">
+      <h2>Open SLA tasks</h2>
+      <ul class="member-list">
+        <li *ngFor="let t of openTasks">
+          <strong>{{ t['title'] }}</strong>
+          <span class="badge">{{ t['priority'] }}</span>
+          <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }}</span>
+        </li>
+        <li *ngIf="!openTasks.length" class="muted">No open tasks — run Process SLA aging.</li>
+      </ul>
+    </section>
+  </ng-container>
 </main>
 
 <!-- Lead detail drawer -->
@@ -346,6 +410,17 @@
   <section>
     <h3>Convert to deal</h3>
     <button type="button" class="btn primary" [disabled]="busy" (click)="createOpportunity(lead)">Create opportunity</button>
+  </section>
+
+  <section>
+    <h3>Convert to ERP</h3>
+    <select class="full" [(ngModel)]="convertTarget" name="convTarget">
+      <option value="SHOP_CUSTOMER">Shop customer</option>
+      <option value="SCHOOL_INQUIRY">School inquiry</option>
+      <option value="FIELD_FORCE">Field Force</option>
+    </select>
+    <button type="button" class="btn" [disabled]="busy" (click)="convertSelectedLead()">Convert (stub/HTTP)</button>
+    <p class="hint">Stores payload when CRM_CONVERT_ENABLED=false.</p>
   </section>
 
   <section>

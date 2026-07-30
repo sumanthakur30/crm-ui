@@ -20,7 +20,7 @@ import {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
-  module: 'leads' | 'deals' | 'quotes' = 'leads';
+  module: 'leads' | 'deals' | 'quotes' | 'insights' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
 
   tenantDraft = '';
@@ -88,6 +88,9 @@ export class AppComponent implements OnInit {
 
   sequenceId: number | null = null;
   enrollRecipient = '';
+  convertTarget: 'SHOP_CUSTOMER' | 'SCHOOL_INQUIRY' | 'FIELD_FORCE' = 'SHOP_CUSTOMER';
+  analytics: Record<string, unknown> | null = null;
+  openTasks: Array<Record<string, unknown>> = [];
 
   importFile: File | null = null;
   importResult: ImportResult | null = null;
@@ -124,7 +127,7 @@ export class AppComponent implements OnInit {
     }));
   }
 
-  setModule(m: 'leads' | 'deals' | 'quotes'): void {
+  setModule(m: 'leads' | 'deals' | 'quotes' | 'insights'): void {
     this.module = m;
     this.selectedLead = null;
     this.selectedOpp = null;
@@ -133,6 +136,8 @@ export class AppComponent implements OnInit {
       this.loadOpportunities();
     } else if (m === 'quotes') {
       this.loadOpportunities();
+    } else if (m === 'insights') {
+      this.loadInsights();
     }
   }
 
@@ -499,6 +504,96 @@ export class AppComponent implements OnInit {
         this.setError(err, 'Accept failed');
       },
     });
+  }
+
+  createPaymentLink(q: Quotation): void {
+    this.busy = true;
+    this.api.createPaymentLink(q.id).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.selectedQuote = updated;
+        this.message = `Payment link: ${updated.paymentLinkUrl}`;
+        this.loadQuotesForOpp(updated.opportunityId);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Payment link failed');
+      },
+    });
+  }
+
+  markPaid(q: Quotation): void {
+    this.busy = true;
+    this.api.markQuotePaid(q.id).subscribe({
+      next: (updated) => {
+        this.busy = false;
+        this.selectedQuote = updated;
+        this.message = `Quote ${updated.quoteNumber} marked PAID`;
+        this.loadQuotesForOpp(updated.opportunityId);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Mark paid failed');
+      },
+    });
+  }
+
+  openPdf(q: Quotation): void {
+    this.api.downloadQuotationPdf(q.id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${q.quoteNumber || 'quotation'}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => this.setError(err, 'PDF download failed'),
+    });
+  }
+
+  loadInsights(): void {
+    this.api.analyticsSummary().subscribe({
+      next: (s) => (this.analytics = s),
+      error: (err) => this.setError(err, 'Analytics failed'),
+    });
+    this.api.listOpenTasks().subscribe({
+      next: (t) => (this.openTasks = t || []),
+      error: () => (this.openTasks = []),
+    });
+  }
+
+  processSla(): void {
+    this.api.processSlaAging().subscribe({
+      next: (r) => {
+        this.message = `SLA: created ${r.tasksCreated}, overdue open ${r.openOverdueTasks}`;
+        this.loadInsights();
+      },
+      error: (err) => this.setError(err, 'SLA process failed'),
+    });
+  }
+
+  convertSelectedLead(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.busy = true;
+    this.api.convertLead(this.selectedLead.id, this.convertTarget).subscribe({
+      next: (res) => {
+        this.busy = false;
+        this.message = `Convert ${this.convertTarget}: ${res['status']}`;
+        this.loadTimeline(this.selectedLead!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Convert failed');
+      },
+    });
+  }
+
+  funnelRows(key: string): Array<Record<string, unknown>> {
+    const rows = this.analytics?.[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
   }
 
   loadTimeline(leadId: number): void {

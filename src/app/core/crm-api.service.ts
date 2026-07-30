@@ -135,6 +135,42 @@ export class CrmApiService {
     return this.http.post<Quotation>(`${this.base}/quotations/${id}/accept`, {});
   }
 
+  createPaymentLink(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/payment-link`, {});
+  }
+
+  markQuotePaid(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/mark-paid`, {});
+  }
+
+  quotationPdfUrl(id: number): string {
+    return `${this.base}/quotations/${id}/pdf`;
+  }
+
+  downloadQuotationPdf(id: number): Observable<Blob> {
+    return this.http.get(`${this.base}/quotations/${id}/pdf`, { responseType: 'blob' });
+  }
+
+  analyticsSummary(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/analytics/summary`);
+  }
+
+  processSlaAging(): Observable<{ tasksCreated: number; openOverdueTasks: number }> {
+    return this.http.post<{ tasksCreated: number; openOverdueTasks: number }>(
+      `${this.base}/tasks/sla/process-aging`,
+      {}
+    );
+  }
+
+  listOpenTasks(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/tasks`);
+  }
+
+  convertLead(id: number, targetSystem: string): Observable<Record<string, unknown>> {
+    const params = new HttpParams().set('targetSystem', targetSystem);
+    return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert`, {}, { params });
+  }
+
   ensureWelcomeSequence(): Observable<{ id: number; code: string; name: string }> {
     return this.http.post<{ id: number; code: string; name: string }>(`${this.base}/sequences/ensure-welcome`, {});
   }
