@@ -209,6 +209,40 @@ input:focus {
   font-size: 0.85rem;
 }
 
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.65rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.kpi {
+  border: 1px solid #e1e7ee;
+  border-radius: 0.45rem;
+  padding: 0.65rem 0.75rem;
+  background: #fafcfe;
+}
+
+.kpi-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #5a6a7a;
+}
+
+.kpi-value {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.muted-kpi .kpi-value {
+  color: #5a6a7a;
+  font-weight: 600;
+}
+
 .check {
   flex-direction: row;
   align-items: center;
@@ -453,6 +487,12 @@ pre.share {
   background: #f5f8fb;
 }
 
+tr.selected,
+.clickable.selected {
+  outline: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+
 .member-list {
   list-style: none;
   margin: 0.75rem 0 0;
@@ -537,4 +577,33 @@ pre.share {
 .timeline p {
   margin: 0.15rem 0 0;
   font-size: 0.85rem;
+}
+
+.drawer.close-prompt {
+  z-index: 30;
+  width: min(360px, 92vw);
+}
+
+.drawer.close-prompt label.full {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.seq-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.seq-step {
+  border: 1px solid #d5dde6;
+  padding: 0.55rem 0.65rem;
+  background: #f8fafc;
+}
+
+.badge.warn {
+  background: #f3d9a8;
+  color: #6a4b00;
 }

@@ -4,15 +4,25 @@ import { Observable } from 'rxjs';
 import {
   Campaign,
   CampaignUpsert,
+  CloseReason,
+  CrmAccount,
+  CrmAttachment,
+  CrmContact,
+  CrmTag,
+  EntitlementsSnapshot,
+  FieldForceEmbedConfig,
   ImportResult,
   Lead,
   LeadUpsert,
   Opportunity,
+  OpportunityStageMove,
   OpportunityUpsert,
   Page,
   Pipeline,
   Quotation,
   QuotationUpsert,
+  Sequence,
+  SequenceUpsert,
   Stage,
   StatusResponse,
   TeamMember,
@@ -29,6 +39,10 @@ export class CrmApiService {
 
   status(): Observable<StatusResponse> {
     return this.http.get<StatusResponse>(`${this.base}/status`);
+  }
+
+  entitlements(): Observable<EntitlementsSnapshot> {
+    return this.http.get<EntitlementsSnapshot>(`${this.base}/entitlements`);
   }
 
   listTemplates(): Observable<string[]> {
@@ -117,8 +131,20 @@ export class CrmApiService {
     return this.http.post<Opportunity>(`${this.base}/opportunities`, body);
   }
 
-  moveOpportunityStage(id: number, stageId: number): Observable<Opportunity> {
-    return this.http.post<Opportunity>(`${this.base}/opportunities/${id}/stage/${stageId}`, {});
+  moveOpportunityStage(
+    id: number,
+    stageId: number,
+    body?: OpportunityStageMove
+  ): Observable<Opportunity> {
+    return this.http.post<Opportunity>(`${this.base}/opportunities/${id}/stage/${stageId}`, body ?? {});
+  }
+
+  listCloseReasons(outcome?: string): Observable<CloseReason[]> {
+    let params = new HttpParams();
+    if (outcome?.trim()) {
+      params = params.set('outcome', outcome.trim());
+    }
+    return this.http.get<CloseReason[]>(`${this.base}/close-reasons`, { params });
   }
 
   createQuotation(body: QuotationUpsert): Observable<Quotation> {
@@ -135,6 +161,14 @@ export class CrmApiService {
 
   acceptQuotation(id: number): Observable<Quotation> {
     return this.http.post<Quotation>(`${this.base}/quotations/${id}/accept`, {});
+  }
+
+  reviseQuotation(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/revise`, {});
+  }
+
+  requestQuoteDiscountApproval(id: number): Observable<Quotation> {
+    return this.http.post<Quotation>(`${this.base}/quotations/${id}/request-discount-approval`, {});
   }
 
   createPaymentLink(id: number): Observable<Quotation> {
@@ -173,8 +207,16 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert`, {}, { params });
   }
 
-  ensureWelcomeSequence(): Observable<{ id: number; code: string; name: string }> {
-    return this.http.post<{ id: number; code: string; name: string }>(`${this.base}/sequences/ensure-welcome`, {});
+  ensureWelcomeSequence(): Observable<Sequence> {
+    return this.http.post<Sequence>(`${this.base}/sequences/ensure-welcome`, {});
+  }
+
+  listSequences(): Observable<Sequence[]> {
+    return this.http.get<Sequence[]>(`${this.base}/sequences`);
+  }
+
+  upsertSequence(body: SequenceUpsert): Observable<Sequence> {
+    return this.http.post<Sequence>(`${this.base}/sequences`, body);
   }
 
   enrollSequence(body: {
@@ -192,6 +234,46 @@ export class CrmApiService {
       `${this.base}/sequences/process-due?limit=${limit}`,
       {}
     );
+  }
+
+  fieldForceEmbedConfig(): Observable<FieldForceEmbedConfig> {
+    return this.http.get<FieldForceEmbedConfig>(`${this.base}/field-force/embed-config`);
+  }
+
+  listTags(): Observable<CrmTag[]> {
+    return this.http.get<CrmTag[]>(`${this.base}/tags`);
+  }
+
+  createTag(body: { code: string; name: string; color?: string }): Observable<CrmTag> {
+    return this.http.post<CrmTag>(`${this.base}/tags`, body);
+  }
+
+  listObjectTags(objectType: string, objectId: number): Observable<CrmTag[]> {
+    return this.http.get<CrmTag[]>(`${this.base}/tags/assignments/${objectType}/${objectId}`);
+  }
+
+  assignTag(objectType: string, objectId: number, tagId: number): Observable<CrmTag[]> {
+    return this.http.post<CrmTag[]>(`${this.base}/tags/assignments/${objectType}/${objectId}`, { tagId });
+  }
+
+  removeTag(objectType: string, objectId: number, tagId: number): Observable<CrmTag[]> {
+    return this.http.delete<CrmTag[]>(`${this.base}/tags/assignments/${objectType}/${objectId}/${tagId}`);
+  }
+
+  listAttachments(objectType: string, objectId: number): Observable<CrmAttachment[]> {
+    return this.http.get<CrmAttachment[]>(`${this.base}/attachments/${objectType}/${objectId}`);
+  }
+
+  createAttachment(
+    objectType: string,
+    objectId: number,
+    body: { fileName: string; contentType?: string; storageUrl?: string; note?: string; sizeBytes?: number }
+  ): Observable<CrmAttachment> {
+    return this.http.post<CrmAttachment>(`${this.base}/attachments/${objectType}/${objectId}`, body);
+  }
+
+  deleteAttachment(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/attachments/${id}`);
   }
 
   listCampaigns(): Observable<Campaign[]> {
@@ -239,6 +321,14 @@ export class CrmApiService {
     );
   }
 
+  listStageAutomationRules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/automation/stage-rules`);
+  }
+
+  createStageAutomationRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/automation/stage-rules`, body);
+  }
+
   logCall(body: Record<string, unknown>): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/ops/calls`, body);
   }
@@ -279,24 +369,26 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${survivorId}/merge/${duplicateId}`, {});
   }
 
-  listAccounts(): Observable<Array<Record<string, unknown>>> {
-    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/accounts`);
+  listAccounts(): Observable<CrmAccount[]> {
+    return this.http.get<CrmAccount[]>(`${this.base}/accounts`);
   }
 
-  upsertAccount(body: Record<string, unknown>): Observable<Record<string, unknown>> {
-    return this.http.post<Record<string, unknown>>(`${this.base}/accounts`, body);
+  upsertAccount(body: Partial<CrmAccount> & { name: string }): Observable<CrmAccount> {
+    return this.http.post<CrmAccount>(`${this.base}/accounts`, body);
   }
 
-  listContacts(accountId?: number): Observable<Array<Record<string, unknown>>> {
+  listContacts(accountId?: number): Observable<CrmContact[]> {
     let params = new HttpParams();
     if (accountId != null) {
       params = params.set('accountId', accountId);
     }
-    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/contacts`, { params });
+    return this.http.get<CrmContact[]>(`${this.base}/contacts`, { params });
   }
 
-  upsertContact(body: Record<string, unknown>): Observable<Record<string, unknown>> {
-    return this.http.post<Record<string, unknown>>(`${this.base}/contacts`, body);
+  upsertContact(
+    body: Partial<CrmContact> & { displayName: string }
+  ): Observable<CrmContact> {
+    return this.http.post<CrmContact>(`${this.base}/contacts`, body);
   }
 
   // —— Phase 4 AI ——

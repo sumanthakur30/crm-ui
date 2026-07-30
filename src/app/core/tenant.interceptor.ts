@@ -17,10 +17,11 @@ export class TenantInterceptor implements HttpInterceptor {
     if (!tenantId || !req.url.includes('/api/')) {
       return next.handle(req);
     }
-    return next.handle(
-      req.clone({
-        setHeaders: { 'X-Tenant-Id': tenantId },
-      })
-    );
+    const headers: Record<string, string> = { 'X-Tenant-Id': tenantId };
+    const shopId = this.tenant.shopId;
+    if (shopId) {
+      headers['X-Shop-Id'] = shopId;
+    }
+    return next.handle(req.clone({ setHeaders: headers }));
   }
 }

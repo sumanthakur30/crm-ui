@@ -23,6 +23,8 @@ export interface LeadUpsert {
   utmCampaign?: string | null;
   utmContent?: string | null;
   utmTerm?: string | null;
+  accountId?: number | null;
+  contactId?: number | null;
 }
 
 export interface Lead {
@@ -49,6 +51,34 @@ export interface Lead {
   utmCampaign?: string | null;
   utmContent?: string | null;
   utmTerm?: string | null;
+  externalRefs?: Record<string, unknown>;
+  accountId?: number | null;
+  contactId?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CrmAccount {
+  id: number;
+  name: string;
+  gstin?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  stateCode?: string | null;
+  pincode?: string | null;
+  attributes?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CrmContact {
+  id: number;
+  accountId?: number | null;
+  displayName: string;
+  email?: string | null;
+  phone?: string | null;
+  title?: string | null;
+  attributes?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -117,6 +147,23 @@ export interface StatusResponse {
   service: string;
   phase: string;
   entitlementCheckEnabled: boolean;
+  convertEnabled?: boolean;
+}
+
+/** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */
+export interface EntitlementsSnapshot {
+  checksEnabled: boolean;
+  features: Record<string, boolean>;
+  modules: {
+    leads?: boolean;
+    quotes?: boolean;
+    campaigns?: boolean;
+    ai?: boolean;
+    sequences?: boolean;
+    approvals?: boolean;
+    automation?: boolean;
+    ops?: boolean;
+  };
 }
 
 export interface Pipeline {
@@ -160,6 +207,7 @@ export interface TimelineItem {
 export interface OpportunityUpsert {
   name: string;
   leadId?: number | null;
+  accountId?: number | null;
   pipelineId?: number | null;
   stageId?: number | null;
   amount?: number | null;
@@ -170,6 +218,22 @@ export interface OpportunityUpsert {
   ownerUserId?: string | null;
   teamId?: string | null;
   attributes?: Record<string, unknown>;
+  closeReasonCode?: string | null;
+  closeReasonNote?: string | null;
+}
+
+export interface OpportunityStageMove {
+  closeReasonCode?: string | null;
+  closeReasonNote?: string | null;
+}
+
+export interface CloseReason {
+  id: number;
+  code: string;
+  name: string;
+  outcome: string;
+  sortOrder: number;
+  active: boolean;
 }
 
 export interface Opportunity {
@@ -178,6 +242,7 @@ export interface Opportunity {
   pipelineId?: number | null;
   stageId?: number | null;
   leadId?: number | null;
+  accountId?: number | null;
   name: string;
   amount?: number | null;
   currency?: string | null;
@@ -187,6 +252,8 @@ export interface Opportunity {
   ownerUserId?: string | null;
   teamId?: string | null;
   attributes?: Record<string, unknown>;
+  closeReasonCode?: string | null;
+  closeReasonNote?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -219,7 +286,10 @@ export interface Quotation {
   opportunityId: number;
   quoteNumber: string;
   versionNo: number;
+  parentQuotationId?: number | null;
   status: string;
+  approvalStatus?: string | null;
+  approvalId?: number | null;
   customerName?: string | null;
   customerGstin?: string | null;
   placeOfSupply?: string | null;
@@ -245,3 +315,54 @@ export interface Quotation {
   paymentAmount?: number | null;
   paidAt?: string | null;
 }
+
+export interface SequenceStep {
+  id?: number;
+  sortOrder: number;
+  delayHours: number;
+  channel: 'WHATSAPP' | 'EMAIL' | 'SMS' | string;
+  subjectTemplate?: string | null;
+  bodyTemplate: string;
+}
+
+export interface Sequence {
+  id: number;
+  code: string;
+  name: string;
+  channelDefault: string;
+  active: boolean;
+  steps: SequenceStep[];
+}
+
+export interface SequenceUpsert {
+  code: string;
+  name: string;
+  channelDefault?: string | null;
+  steps?: SequenceStep[] | null;
+}
+
+export interface CrmTag {
+  id: number;
+  code: string;
+  name: string;
+  color?: string | null;
+}
+
+export interface CrmAttachment {
+  id: number;
+  objectType: string;
+  objectId: number;
+  fileName: string;
+  contentType?: string | null;
+  storageUrl?: string | null;
+  sizeBytes?: number | null;
+  note?: string | null;
+  createdAt?: string;
+}
+
+export interface FieldForceEmbedConfig {
+  enabled: boolean;
+  visitUrlTemplate: string;
+  openInNewTab: boolean;
+}
+

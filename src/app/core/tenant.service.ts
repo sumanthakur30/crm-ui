@@ -20,4 +20,18 @@ export class TenantService {
     localStorage.setItem(STORAGE_KEY, next);
     this.tenantSubject.next(next);
   }
+
+  /** Optional numeric shop org for ERP convert (user-service X-Shop-Id). */
+  get shopId(): string {
+    return localStorage.getItem('crm.shopId') || '';
+  }
+
+  setShopId(shopId: string): void {
+    const next = (shopId || '').trim();
+    if (next) {
+      localStorage.setItem('crm.shopId', next);
+    } else {
+      localStorage.removeItem('crm.shopId');
+    }
+  }
 }
