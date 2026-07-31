@@ -305,6 +305,14 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/ops/forecast`);
   }
 
+  upsertForecastCommit(body: {
+    periodYm: string;
+    amount: number;
+    note?: string;
+  }): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/ops/forecast/commits`, body);
+  }
+
   listApprovals(status = 'PENDING'): Observable<Array<Record<string, unknown>>> {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/ops/approvals`, {
       params: new HttpParams().set('status', status),

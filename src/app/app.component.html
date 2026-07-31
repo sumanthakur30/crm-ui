@@ -800,7 +800,32 @@
         <h2>Forecast</h2>
         <p class="hint" *ngIf="forecast as f">
           Open {{ f['openCount'] }} · Pipeline ₹{{ f['pipelineAmount'] }} · Weighted ₹{{ f['weightedForecast'] }}
+          · Commits ₹{{ f['commitTotal'] || 0 }}
         </p>
+        <p class="hint" *ngIf="forecast?.['collaborative'] as c">
+          Collaborative: weighted {{ $any(c)['pipelineWeighted'] }} + commits {{ $any(c)['commitTotal'] }} =
+          {{ $any(c)['combined'] }}
+        </p>
+        <div class="form">
+          <label>Period (YYYY-MM)
+            <input [(ngModel)]="forecastCommitForm.periodYm" name="fcPeriod" placeholder="2026-07" />
+          </label>
+          <label>Your commit amount
+            <input type="number" [(ngModel)]="forecastCommitForm.amount" name="fcAmt" />
+          </label>
+          <label>Note <input [(ngModel)]="forecastCommitForm.note" name="fcNote" /></label>
+          <button type="button" class="btn primary" [disabled]="busy" (click)="saveForecastCommit()">
+            Upsert my commit
+          </button>
+        </div>
+        <ul class="member-list">
+          <li *ngFor="let c of forecastCommits">
+            <strong>{{ c['userId'] }}</strong>
+            <span class="badge">₹{{ c['amount'] }}</span>
+            <span class="muted">{{ c['note'] || c['periodYm'] }}</span>
+          </li>
+          <li *ngIf="!forecastCommits.length" class="muted">No commits for period yet.</li>
+        </ul>
         <button type="button" class="btn" (click)="loadOps()">Refresh ops</button>
       </section>
       <section class="panel">

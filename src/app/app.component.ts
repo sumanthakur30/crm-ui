@@ -238,6 +238,12 @@ export class AppComponent implements OnInit {
   dealFunnel: Array<Record<string, unknown>> = [];
   openTasks: Array<Record<string, unknown>> = [];
   forecast: Record<string, unknown> | null = null;
+  forecastCommitForm = { periodYm: '', amount: 0, note: '' };
+
+  get forecastCommits(): Array<Record<string, unknown>> {
+    const rows = this.forecast?.['commits'];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
   approvals: Array<Record<string, unknown>> = [];
   fieldAcl: Array<Record<string, unknown>> = [];
   adapterEvents: Array<Record<string, unknown>> = [];
@@ -1364,7 +1370,13 @@ export class AppComponent implements OnInit {
 
   loadOps(): void {
     this.api.forecast().subscribe({
-      next: (f) => (this.forecast = f),
+      next: (f) => {
+        this.forecast = f;
+        const period = String(f['periodYm'] || '');
+        if (period && !this.forecastCommitForm.periodYm) {
+          this.forecastCommitForm.periodYm = period;
+        }
+      },
       error: (err) => this.setError(err, 'Forecast failed'),
     });
     this.api.listApprovals().subscribe({
@@ -1391,6 +1403,33 @@ export class AppComponent implements OnInit {
     } else {
       this.stageAutomationRules = [];
     }
+  }
+
+  saveForecastCommit(): void {
+    const period = (this.forecastCommitForm.periodYm || '').trim();
+    if (!period) {
+      this.error = 'Period YYYY-MM required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertForecastCommit({
+        periodYm: period,
+        amount: Number(this.forecastCommitForm.amount) || 0,
+        note: this.forecastCommitForm.note || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Forecast commit saved for ${period}`;
+          this.error = '';
+          this.loadOps();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Forecast commit failed');
+        },
+      });
   }
 
   loadCases(): void {
