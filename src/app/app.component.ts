@@ -62,6 +62,7 @@ export class AppComponent implements OnInit {
   shopDraft = '';
   workspaceName = 'Demo Workspace';
   convertEnabled = false;
+  ctiEnabled = false;
   lastConvert: Record<string, unknown> | null = null;
   templateCode = 'RETAIL';
   templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
@@ -420,9 +421,11 @@ export class AppComponent implements OnInit {
           ? 'campaigns'
           : m === 'enterprise'
             ? 'ai'
-            : m === 'ops' || m === 'cases'
+            : m === 'ops'
               ? 'ops'
-              : null;
+              : m === 'cases'
+                ? 'cases'
+                : null;
     if (gateKey && !this.can(gateKey)) {
       this.error = this.upgradeHint(m);
       return;
@@ -527,7 +530,11 @@ export class AppComponent implements OnInit {
     this.api.status().subscribe({
       next: (s) => {
         this.convertEnabled = !!s.convertEnabled;
-        this.message = `${s.service} phase ${s.phase}` + (s.convertEnabled ? ' · convert on' : ' · convert off');
+        this.ctiEnabled = !!s.ctiEnabled;
+        this.message =
+          `${s.service} phase ${s.phase}` +
+          (s.convertEnabled ? ' · convert on' : ' · convert off') +
+          (s.ctiEnabled ? ' · CTI on' : ' · CTI off');
         this.error = '';
       },
       error: (err) => this.setError(err, 'Status check failed — is crm-service on :8095?'),
@@ -1468,6 +1475,26 @@ export class AppComponent implements OnInit {
     });
   }
 
+  copyCsatPublicLink(c: CrmCase): void {
+    const path = c.csatPublicPath;
+    if (!path) {
+      return;
+    }
+    const text = path.startsWith('http') ? path : `${window.location.origin}${path}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => {
+          this.message = `Copied CSAT link for case #${c.id}`;
+        },
+        () => {
+          this.message = text;
+        }
+      );
+    } else {
+      this.message = text;
+    }
+  }
+
   createStageRule(): void {
     if (!this.can('automation')) {
       this.error = this.upgradeHint('Automation');
@@ -1539,6 +1566,29 @@ export class AppComponent implements OnInit {
         },
         error: (err) => this.setError(err, 'Call log failed'),
       });
+  }
+
+  clickToDialSelected(): void {
+    if (!this.selectedLead || !this.ctiEnabled) {
+      return;
+    }
+    const phone = (this.callForm.phone || this.selectedLead.phone || '').trim();
+    if (!phone) {
+      this.error = 'Phone required for click-to-dial';
+      return;
+    }
+    this.busy = true;
+    this.api.clickToDial({ phone, leadId: this.selectedLead.id }).subscribe({
+      next: (res) => {
+        this.busy = false;
+        this.message = `CTI ${res['status'] || 'ok'} · call ${res['callId'] || ''}`;
+        this.loadTimeline(this.selectedLead!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Click-to-dial failed');
+      },
+    });
   }
 
   bookMeetingSelected(): void {

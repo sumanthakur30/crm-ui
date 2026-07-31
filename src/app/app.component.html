@@ -74,7 +74,16 @@
           Campaigns
         </button>
         <button type="button" class="btn" [class.primary]="module === 'ops'" (click)="setModule('ops')">Ops</button>
-        <button type="button" class="btn" [class.primary]="module === 'cases'" (click)="setModule('cases')">Cases</button>
+        <button
+          type="button"
+          class="btn"
+          [class.primary]="module === 'cases'"
+          [disabled]="!can('cases')"
+          [title]="can('cases') ? '' : upgradeHint('Cases')"
+          (click)="setModule('cases')"
+        >
+          Cases
+        </button>
         <button
           type="button"
           class="btn"
@@ -93,7 +102,7 @@
         · plan checks {{ ent.checksEnabled ? 'on' : 'off' }}
       </span>
     </p>
-    <p class="flash err" *ngIf="entitlements?.checksEnabled && (!can('quotes') || !can('campaigns') || !can('ai'))">
+    <p class="flash err" *ngIf="entitlements?.checksEnabled && (!can('quotes') || !can('campaigns') || !can('ai') || !can('cases'))">
       Some modules are locked by subscription — upgrade in Super Admin → Platform Subscription.
     </p>
   </section>
@@ -690,7 +699,7 @@
     <div class="grid-2">
       <section class="panel">
         <h2>Create case</h2>
-        <p class="hint">Minimal support ticket — gated by FEATURE_CRM (full Service Hub later).</p>
+        <p class="hint">Minimal support ticket — gated by FEATURE_CRM_CASES (enterprise).</p>
         <form class="form" (ngSubmit)="createCase()">
           <label>Subject * <input required [(ngModel)]="caseForm.subject" name="caseSubject" /></label>
           <label>Priority
@@ -762,6 +771,16 @@
                   </select>
                   <input [(ngModel)]="csatDraft[c.id].comment" [name]="'csatComment' + c.id" placeholder="CSAT comment" />
                   <button type="button" class="btn primary" (click)="submitCsat(c)">Save CSAT</button>
+                </div>
+                <div class="row wrap" *ngIf="c.csatPublicPath" style="margin-top: 0.35rem">
+                  <input
+                    class="full"
+                    readonly
+                    [value]="c.csatPublicPath"
+                    [name]="'csatLink' + c.id"
+                    [title]="c.csatPublicPath"
+                  />
+                  <button type="button" class="btn" (click)="copyCsatPublicLink(c)">Copy survey link</button>
                 </div>
               </td>
             </tr>
@@ -1022,6 +1041,15 @@
       <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />
       <input type="number" [(ngModel)]="callForm.durationSec" name="callDur" />
       <button type="button" class="btn primary" (click)="logCallSelected()">Log call</button>
+      <button
+        type="button"
+        class="btn"
+        *ngIf="ctiEnabled"
+        [disabled]="busy || !(callForm.phone || lead.phone)"
+        (click)="clickToDialSelected()"
+      >
+        Call
+      </button>
     </div>
     <div class="ai-result" *ngIf="lastInsight as ins">
       <strong>{{ ins['title'] }}</strong>

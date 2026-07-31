@@ -148,6 +148,7 @@ export interface StatusResponse {
   phase: string;
   entitlementCheckEnabled: boolean;
   convertEnabled?: boolean;
+  ctiEnabled?: boolean;
 }
 
 /** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */
@@ -167,7 +168,7 @@ export interface EntitlementsSnapshot {
   };
 }
 
-/** Minimal support case (FEATURE_CRM) — CSAT on resolve. */
+/** Minimal support case (FEATURE_CRM_CASES) — CSAT on resolve. */
 export interface CrmCase {
   id: number;
   subject: string;
@@ -179,6 +180,8 @@ export interface CrmCase {
   csatScore?: number | null;
   csatComment?: string | null;
   csatSubmittedAt?: string | null;
+  csatPublicToken?: string | null;
+  csatPublicPath?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

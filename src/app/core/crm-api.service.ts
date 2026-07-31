@@ -507,4 +507,13 @@ export class CrmApiService {
   submitCaseCsat(id: number, body: { score: number; comment?: string }): Observable<CrmCase> {
     return this.http.post<CrmCase>(`${this.base}/cases/${id}/csat`, body);
   }
+
+  clickToDial(body: {
+    phone: string;
+    leadId?: number | null;
+    opportunityId?: number | null;
+    caseId?: number | null;
+  }): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/cti/click-to-dial`, body);
+  }
 }
