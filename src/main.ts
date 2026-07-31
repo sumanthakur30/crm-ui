@@ -6,7 +6,7 @@ platformBrowserDynamic()
   .bootstrapModule(AppModule)
   .then(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/assets/sw.js').catch(() => undefined);
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
   })
   .catch((err) => console.error(err));
