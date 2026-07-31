@@ -663,6 +663,7 @@
           <label>Email <input [(ngModel)]="captureDemo.email" name="capEmail" /></label>
           <button type="submit" class="btn primary" [disabled]="busy || !campaigns.length">Capture lead</button>
         </form>
+        <p class="hint">Inbound signing: {{ inboundSigningEnabled ? 'on' : 'off' }} (adapters HMAC)</p>
       </section>
     </div>
     <section class="panel">
@@ -888,6 +889,7 @@
         <input [(ngModel)]="adapterName" name="adName" placeholder="Name" />
         <input [(ngModel)]="adapterPhone" name="adPhone" placeholder="Phone" />
         <p class="hint">Meta/Google use campaign public key when set on Campaigns tab.</p>
+        <p class="hint">Inbound signing: {{ inboundSigningEnabled ? 'on' : 'off' }}</p>
         <button type="button" class="btn primary" (click)="runAdapter()">Ingest</button>
         <ul class="member-list">
           <li *ngFor="let e of adapterEvents">
@@ -938,6 +940,7 @@
           <input [(ngModel)]="enterpriseForm.ssoMetadataUrl" name="ssoMeta" placeholder="SSO metadata URL" />
           <button type="button" class="btn primary" [disabled]="busy" (click)="saveEnterprise()">Save settings</button>
           <p class="hint" *ngIf="ssoNote">{{ ssoNote }}</p>
+          <p class="hint">Inbound signing: {{ inboundSigningEnabled ? 'on' : 'off' }}</p>
         </div>
         <ng-template #loadEnt>
           <button type="button" class="btn" (click)="loadEnterprise()">Load settings</button>

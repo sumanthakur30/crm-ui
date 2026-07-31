@@ -63,6 +63,7 @@ export class AppComponent implements OnInit {
   workspaceName = 'Demo Workspace';
   convertEnabled = false;
   ctiEnabled = false;
+  inboundSigningEnabled = false;
   lastConvert: Record<string, unknown> | null = null;
   templateCode = 'RETAIL';
   templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
@@ -531,10 +532,12 @@ export class AppComponent implements OnInit {
       next: (s) => {
         this.convertEnabled = !!s.convertEnabled;
         this.ctiEnabled = !!s.ctiEnabled;
+        this.inboundSigningEnabled = !!s.inboundSigningEnabled;
         this.message =
           `${s.service} phase ${s.phase}` +
           (s.convertEnabled ? ' · convert on' : ' · convert off') +
-          (s.ctiEnabled ? ' · CTI on' : ' · CTI off');
+          (s.ctiEnabled ? ' · CTI on' : ' · CTI off') +
+          (s.inboundSigningEnabled ? ' · inbound signing on' : ' · inbound signing off');
         this.error = '';
       },
       error: (err) => this.setError(err, 'Status check failed — is crm-service on :8095?'),

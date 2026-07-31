@@ -149,6 +149,7 @@ export interface StatusResponse {
   entitlementCheckEnabled: boolean;
   convertEnabled?: boolean;
   ctiEnabled?: boolean;
+  inboundSigningEnabled?: boolean;
 }
 
 /** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */
