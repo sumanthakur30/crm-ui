@@ -1,6 +1,6 @@
 /* Minimal installable shell + offline fallback for CRM UI. */
 const CACHE = 'crm-ui-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
+const SHELL = ['/', '/index.html', '/assets/manifest.webmanifest', '/manifest.webmanifest', '/assets/icons/icon-192.png', '/assets/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
