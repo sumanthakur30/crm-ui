@@ -275,6 +275,8 @@ export class AppComponent implements OnInit {
   ssoNote = '';
   ssoHandshake: Record<string, unknown> | null = null;
   ssoAuthorizeUrl = '';
+  meters: Record<string, unknown> | null = null;
+  seatsDraft = 0;
   auditExports: Array<Record<string, unknown>> = [];
   aiInsights: Array<Record<string, unknown>> = [];
   lastInsight: Record<string, unknown> | null = null;
@@ -1405,6 +1407,14 @@ export class AppComponent implements OnInit {
     } else {
       this.stageAutomationRules = [];
     }
+    this.api.meters().subscribe({
+      next: (m) => {
+        this.meters = m;
+        const seats = m['seats'] as Record<string, unknown> | undefined;
+        this.seatsDraft = Number(seats?.['used'] ?? 0);
+      },
+      error: () => (this.meters = null),
+    });
   }
 
   saveForecastCommit(): void {
@@ -1432,6 +1442,22 @@ export class AppComponent implements OnInit {
           this.setError(err, 'Forecast commit failed');
         },
       });
+  }
+
+  saveSeatsMeter(): void {
+    this.busy = true;
+    this.api.setSeatsUsed(Number(this.seatsDraft) || 0).subscribe({
+      next: (m) => {
+        this.busy = false;
+        this.meters = m;
+        this.message = 'Seats meter updated';
+        this.error = '';
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Seats meter update failed');
+      },
+    });
   }
 
   loadCases(): void {
@@ -1810,6 +1836,14 @@ export class AppComponent implements OnInit {
         this.ssoAuthorizeUrl = '';
       },
       error: () => (this.ssoHandshake = null),
+    });
+    this.api.meters().subscribe({
+      next: (m) => {
+        this.meters = m;
+        const seats = m['seats'] as Record<string, unknown> | undefined;
+        this.seatsDraft = Number(seats?.['used'] ?? 0);
+      },
+      error: () => (this.meters = null),
     });
     this.api.listAuditExports().subscribe({
       next: (rows) => (this.auditExports = rows || []),

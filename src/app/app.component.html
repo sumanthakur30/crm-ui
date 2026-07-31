@@ -795,6 +795,19 @@
   </ng-container>
 
   <ng-container *ngIf="module === 'ops'">
+    <section class="panel" *ngIf="meters as m">
+      <h2>Usage meters</h2>
+      <p class="hint">
+        Seats {{ $any(m['seats'])?.used ?? 0 }} / {{ $any(m['seats'])?.limit ?? '∞' }}
+        · API {{ $any(m['apiCallsMonth'])?.used ?? 0 }} / {{ $any(m['apiCallsMonth'])?.limit ?? '∞' }}
+        ({{ $any(m['apiCallsMonth'])?.period }})
+        · enforce {{ m['enforcementEnabled'] ? 'on' : 'off' }}
+      </p>
+      <div class="row wrap">
+        <label>Set seats used <input type="number" [(ngModel)]="seatsDraft" name="seatsUsed" /></label>
+        <button type="button" class="btn" [disabled]="busy" (click)="saveSeatsMeter()">Save seats</button>
+      </div>
+    </section>
     <div class="grid-2">
       <section class="panel">
         <h2>Forecast</h2>
@@ -978,6 +991,10 @@
               Open authorize URL
             </a>
           </div>
+          <p class="hint" *ngIf="meters as m">
+            Meters · seats {{ $any(m['seats'])?.used ?? 0 }}/{{ $any(m['seats'])?.limit ?? '∞' }}
+            · API {{ $any(m['apiCallsMonth'])?.used ?? 0 }}/{{ $any(m['apiCallsMonth'])?.limit ?? '∞' }}
+          </p>
         </div>
         <ng-template #loadEnt>
           <button type="button" class="btn" (click)="loadEnterprise()">Load settings</button>

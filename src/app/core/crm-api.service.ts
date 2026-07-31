@@ -491,6 +491,14 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/sso/authorize`);
   }
 
+  meters(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/meters`);
+  }
+
+  setSeatsUsed(used: number): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/meters/seats`, { used });
+  }
+
   requestAuditExport(body: Record<string, unknown> = {}): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/enterprise/audit-exports`, body);
   }
