@@ -163,7 +163,24 @@ export interface EntitlementsSnapshot {
     approvals?: boolean;
     automation?: boolean;
     ops?: boolean;
+    cases?: boolean;
   };
+}
+
+/** Minimal support case (FEATURE_CRM) — CSAT on resolve. */
+export interface CrmCase {
+  id: number;
+  subject: string;
+  status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED' | string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT' | string;
+  relatedLeadId?: number | null;
+  relatedOpportunityId?: number | null;
+  assignedTo?: string | null;
+  csatScore?: number | null;
+  csatComment?: string | null;
+  csatSubmittedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface Pipeline {

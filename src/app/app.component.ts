@@ -7,6 +7,7 @@ import {
   CloseReason,
   CrmAccount,
   CrmAttachment,
+  CrmCase,
   CrmContact,
   CrmTag,
   EntitlementsSnapshot,
@@ -41,7 +42,16 @@ export interface DealKanbanColumn {
 })
 export class AppComponent implements OnInit {
   title = 'SugamFlow CRM';
-  module: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'accounts' | 'ops' | 'enterprise' = 'leads';
+  module:
+    | 'leads'
+    | 'deals'
+    | 'quotes'
+    | 'insights'
+    | 'campaigns'
+    | 'accounts'
+    | 'ops'
+    | 'cases'
+    | 'enterprise' = 'leads';
   view: 'list' | 'kanban' = 'kanban';
   /** Cached for template — getters that allocate each CD cycle freeze Chrome ("Page Unresponsive"). */
   kanbanColumns: LeadKanbanColumn[] = [];
@@ -261,6 +271,17 @@ export class AppComponent implements OnInit {
   copilotQuestion = '';
   aiLanguage = 'en';
 
+  cases: CrmCase[] = [];
+  caseFilterStatus = '';
+  caseForm = {
+    subject: '',
+    priority: 'MEDIUM',
+    assignedTo: '',
+    relatedLeadId: null as number | null,
+    relatedOpportunityId: null as number | null,
+  };
+  csatDraft: Record<number, { score: number; comment: string }> = {};
+
   importFile: File | null = null;
   importResult: ImportResult | null = null;
   assignRoundRobin = false;
@@ -381,7 +402,16 @@ export class AppComponent implements OnInit {
   }
 
   setModule(
-    m: 'leads' | 'deals' | 'quotes' | 'insights' | 'campaigns' | 'accounts' | 'ops' | 'enterprise'
+    m:
+      | 'leads'
+      | 'deals'
+      | 'quotes'
+      | 'insights'
+      | 'campaigns'
+      | 'accounts'
+      | 'ops'
+      | 'cases'
+      | 'enterprise'
   ): void {
     const gateKey =
       m === 'quotes'
@@ -390,7 +420,7 @@ export class AppComponent implements OnInit {
           ? 'campaigns'
           : m === 'enterprise'
             ? 'ai'
-            : m === 'ops'
+            : m === 'ops' || m === 'cases'
               ? 'ops'
               : null;
     if (gateKey && !this.can(gateKey)) {
@@ -416,6 +446,8 @@ export class AppComponent implements OnInit {
       this.loadAccounts();
     } else if (m === 'ops') {
       this.loadOps();
+    } else if (m === 'cases') {
+      this.loadCases();
     } else if (m === 'enterprise') {
       this.loadEnterprise();
       if (this.selectedLead) {
@@ -1349,6 +1381,91 @@ export class AppComponent implements OnInit {
     } else {
       this.stageAutomationRules = [];
     }
+  }
+
+  loadCases(): void {
+    this.api.listCases(this.caseFilterStatus || undefined).subscribe({
+      next: (rows) => {
+        this.cases = rows || [];
+        for (const c of this.cases) {
+          if (!this.csatDraft[c.id]) {
+            this.csatDraft[c.id] = { score: 5, comment: '' };
+          }
+        }
+      },
+      error: (err) => this.setError(err, 'Cases failed to load'),
+    });
+  }
+
+  createCase(): void {
+    if (!this.caseForm.subject.trim()) {
+      this.error = 'Case subject is required';
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    const body: Record<string, unknown> = {
+      subject: this.caseForm.subject.trim(),
+      priority: this.caseForm.priority,
+    };
+    if (this.caseForm.assignedTo.trim()) {
+      body['assignedTo'] = this.caseForm.assignedTo.trim();
+    }
+    if (this.caseForm.relatedLeadId) {
+      body['relatedLeadId'] = this.caseForm.relatedLeadId;
+    }
+    if (this.caseForm.relatedOpportunityId) {
+      body['relatedOpportunityId'] = this.caseForm.relatedOpportunityId;
+    }
+    this.api.createCase(body).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = 'Case created';
+        this.caseForm = {
+          subject: '',
+          priority: 'MEDIUM',
+          assignedTo: '',
+          relatedLeadId: null,
+          relatedOpportunityId: null,
+        };
+        this.loadCases();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Create case failed');
+      },
+    });
+  }
+
+  setCaseStatus(c: CrmCase, status: string): void {
+    this.busy = true;
+    this.api.updateCaseStatus(c.id, { status }).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Case #${c.id} → ${status}`;
+        this.loadCases();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Update case status failed');
+      },
+    });
+  }
+
+  submitCsat(c: CrmCase): void {
+    const draft = this.csatDraft[c.id] || { score: 5, comment: '' };
+    this.busy = true;
+    this.api.submitCaseCsat(c.id, { score: draft.score, comment: draft.comment || undefined }).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `CSAT ${draft.score}/5 saved for case #${c.id}`;
+        this.loadCases();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'CSAT submit failed');
+      },
+    });
   }
 
   createStageRule(): void {

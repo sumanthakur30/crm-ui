@@ -7,6 +7,7 @@ import {
   CloseReason,
   CrmAccount,
   CrmAttachment,
+  CrmCase,
   CrmContact,
   CrmTag,
   EntitlementsSnapshot,
@@ -480,5 +481,30 @@ export class CrmApiService {
 
   listAuditExports(): Observable<Array<Record<string, unknown>>> {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/enterprise/audit-exports`);
+  }
+
+  // —— Cases + CSAT (minimal) ——
+  listCases(status?: string): Observable<CrmCase[]> {
+    let params = new HttpParams();
+    if (status?.trim()) {
+      params = params.set('status', status.trim());
+    }
+    return this.http.get<CrmCase[]>(`${this.base}/cases`, { params });
+  }
+
+  getCase(id: number): Observable<CrmCase> {
+    return this.http.get<CrmCase>(`${this.base}/cases/${id}`);
+  }
+
+  createCase(body: Record<string, unknown>): Observable<CrmCase> {
+    return this.http.post<CrmCase>(`${this.base}/cases`, body);
+  }
+
+  updateCaseStatus(id: number, body: Record<string, unknown>): Observable<CrmCase> {
+    return this.http.put<CrmCase>(`${this.base}/cases/${id}/status`, body);
+  }
+
+  submitCaseCsat(id: number, body: { score: number; comment?: string }): Observable<CrmCase> {
+    return this.http.post<CrmCase>(`${this.base}/cases/${id}/csat`, body);
   }
 }

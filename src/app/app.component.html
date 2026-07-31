@@ -74,6 +74,7 @@
           Campaigns
         </button>
         <button type="button" class="btn" [class.primary]="module === 'ops'" (click)="setModule('ops')">Ops</button>
+        <button type="button" class="btn" [class.primary]="module === 'cases'" (click)="setModule('cases')">Cases</button>
         <button
           type="button"
           class="btn"
@@ -684,6 +685,95 @@
   </ng-container>
 
   <!-- ========== OPS (Phase 3b) ========== -->
+  <!-- ========== CASES ========== -->
+  <ng-container *ngIf="module === 'cases'">
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Create case</h2>
+        <p class="hint">Minimal support ticket — gated by FEATURE_CRM (full Service Hub later).</p>
+        <form class="form" (ngSubmit)="createCase()">
+          <label>Subject * <input required [(ngModel)]="caseForm.subject" name="caseSubject" /></label>
+          <label>Priority
+            <select [(ngModel)]="caseForm.priority" name="casePri">
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+              <option value="URGENT">URGENT</option>
+            </select>
+          </label>
+          <label>Assigned to <input [(ngModel)]="caseForm.assignedTo" name="caseAssignee" placeholder="user id" /></label>
+          <label>Related lead id <input type="number" [(ngModel)]="caseForm.relatedLeadId" name="caseLead" /></label>
+          <label>Related deal id <input type="number" [(ngModel)]="caseForm.relatedOpportunityId" name="caseOpp" /></label>
+          <button type="submit" class="btn primary" [disabled]="busy">Create</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Filter</h2>
+        <div class="row wrap">
+          <select [(ngModel)]="caseFilterStatus" name="caseFilter" (ngModelChange)="loadCases()">
+            <option value="">All</option>
+            <option value="OPEN">OPEN</option>
+            <option value="PENDING">PENDING</option>
+            <option value="RESOLVED">RESOLVED</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+          <button type="button" class="btn" (click)="loadCases()">Refresh</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Cases</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th>Subject</th>
+              <th>Status</th>
+              <th>Priority</th>
+              <th>CSAT</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of cases; trackBy: trackById">
+              <td>{{ c.id }}</td>
+              <td>{{ c.subject }}</td>
+              <td><span class="badge">{{ c.status }}</span></td>
+              <td>{{ c.priority }}</td>
+              <td>
+                <span *ngIf="c.csatScore != null">{{ c.csatScore }}/5</span>
+                <span *ngIf="c.csatScore == null" class="muted">—</span>
+              </td>
+              <td>
+                <div class="row wrap">
+                  <button type="button" class="btn" (click)="setCaseStatus(c, 'PENDING')">Pending</button>
+                  <button type="button" class="btn" (click)="setCaseStatus(c, 'RESOLVED')">Resolve</button>
+                  <button type="button" class="btn" (click)="setCaseStatus(c, 'CLOSED')">Close</button>
+                </div>
+                <div class="row wrap" *ngIf="c.csatScore == null" style="margin-top: 0.35rem">
+                  <select [(ngModel)]="csatDraft[c.id].score" [name]="'csatScore' + c.id">
+                    <option [ngValue]="1">1</option>
+                    <option [ngValue]="2">2</option>
+                    <option [ngValue]="3">3</option>
+                    <option [ngValue]="4">4</option>
+                    <option [ngValue]="5">5</option>
+                  </select>
+                  <input [(ngModel)]="csatDraft[c.id].comment" [name]="'csatComment' + c.id" placeholder="CSAT comment" />
+                  <button type="button" class="btn primary" (click)="submitCsat(c)">Save CSAT</button>
+                </div>
+              </td>
+            </tr>
+            <tr *ngIf="!cases.length">
+              <td colspan="6" class="muted">No cases yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </ng-container>
+
   <ng-container *ngIf="module === 'ops'">
     <div class="grid-2">
       <section class="panel">
