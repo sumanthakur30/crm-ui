@@ -483,6 +483,14 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/enterprise/sso`);
   }
 
+  ssoHandshakeStatus(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/sso/status`);
+  }
+
+  ssoAuthorize(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/sso/authorize`);
+  }
+
   requestAuditExport(body: Record<string, unknown> = {}): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/enterprise/audit-exports`, body);
   }

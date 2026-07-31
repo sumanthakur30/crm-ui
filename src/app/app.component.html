@@ -966,6 +966,18 @@
           <button type="button" class="btn primary" [disabled]="busy" (click)="saveEnterprise()">Save settings</button>
           <p class="hint" *ngIf="ssoNote">{{ ssoNote }}</p>
           <p class="hint">Inbound signing: {{ inboundSigningEnabled ? 'on' : 'off' }}</p>
+          <p class="hint" *ngIf="ssoHandshake as hs">
+            SSO handshake: {{ hs['handshake'] }} · provider {{ hs['provider'] }} ·
+            enabled {{ hs['enabled'] }}
+          </p>
+          <div class="row wrap">
+            <button type="button" class="btn" [disabled]="busy" (click)="beginSsoHandshake()">
+              Begin handshake
+            </button>
+            <a *ngIf="ssoAuthorizeUrl" class="btn primary" [href]="ssoAuthorizeUrl" target="_blank" rel="noopener">
+              Open authorize URL
+            </a>
+          </div>
         </div>
         <ng-template #loadEnt>
           <button type="button" class="btn" (click)="loadEnterprise()">Load settings</button>

@@ -273,6 +273,8 @@ export class AppComponent implements OnInit {
     ssoMetadataUrl: '',
   };
   ssoNote = '';
+  ssoHandshake: Record<string, unknown> | null = null;
+  ssoAuthorizeUrl = '';
   auditExports: Array<Record<string, unknown>> = [];
   aiInsights: Array<Record<string, unknown>> = [];
   lastInsight: Record<string, unknown> | null = null;
@@ -1802,9 +1804,32 @@ export class AppComponent implements OnInit {
       next: (s) => (this.ssoNote = String(s['note'] || '')),
       error: () => (this.ssoNote = ''),
     });
+    this.api.ssoHandshakeStatus().subscribe({
+      next: (s) => {
+        this.ssoHandshake = s;
+        this.ssoAuthorizeUrl = '';
+      },
+      error: () => (this.ssoHandshake = null),
+    });
     this.api.listAuditExports().subscribe({
       next: (rows) => (this.auditExports = rows || []),
       error: () => (this.auditExports = []),
+    });
+  }
+
+  beginSsoHandshake(): void {
+    this.busy = true;
+    this.api.ssoAuthorize().subscribe({
+      next: (res) => {
+        this.busy = false;
+        this.ssoAuthorizeUrl = String(res['authorizeUrl'] || '');
+        this.message = `SSO handshake state ${res['state']} · ${res['provider']}`;
+        this.error = '';
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'SSO authorize failed (enable crm.sso + client-id)');
+      },
     });
   }
 
