@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="hint">Phase 5 · Sprint 5–6 — pipeline analytics · automation · sequences</p>
+      <p class="tag">Phase 5 · Sprint 7 — omnichannel WA/SMS/Email</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -1574,6 +1574,46 @@
     </div>
     <input *ngIf="assignMode === 'MANUAL'" [(ngModel)]="manualOwner" name="mowner" placeholder="owner userId" class="full" />
     <button type="button" class="btn primary" [disabled]="busy" (click)="assignSelected()">Assign</button>
+  </section>
+
+  <section>
+    <h3>Message (WA / SMS / Email)</h3>
+    <p class="hint">Queues via notification-service when enabled; always writes MESSAGE_* on timeline.</p>
+    <div class="row wrap">
+      <select [(ngModel)]="messageForm.channel" name="msgCh" (ngModelChange)="onMessageChannelChange()">
+        <option value="WHATSAPP" [disabled]="!canChannel('WHATSAPP')">WhatsApp</option>
+        <option value="SMS" [disabled]="!canChannel('SMS')">SMS</option>
+        <option value="EMAIL" [disabled]="!canChannel('EMAIL')">Email</option>
+      </select>
+      <input class="full" [(ngModel)]="messageForm.recipient" name="msgTo" placeholder="Recipient phone / email" />
+    </div>
+    <input
+      *ngIf="messageForm.channel === 'EMAIL'"
+      class="full"
+      [(ngModel)]="messageForm.subject"
+      name="msgSub"
+      placeholder="Subject"
+    />
+    <textarea [(ngModel)]="messageForm.body" name="msgBody" rows="3" placeholder="Message body…"></textarea>
+    <div class="row wrap">
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy || !can('ai')"
+        [title]="can('ai') ? '' : upgradeHint('AI')"
+        (click)="useAiDraftForMessage()"
+      >
+        AI draft
+      </button>
+      <button
+        type="button"
+        class="btn primary"
+        [disabled]="busy || !messageForm.body.trim() || !canChannel(messageForm.channel)"
+        (click)="sendLeadMessage()"
+      >
+        Send
+      </button>
+    </div>
   </section>
 
   <section>

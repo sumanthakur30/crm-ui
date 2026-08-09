@@ -91,6 +91,12 @@ export class AppComponent implements OnInit, OnDestroy {
   selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
   noteDraft = '';
+  messageForm = {
+    channel: 'WHATSAPP' as 'WHATSAPP' | 'SMS' | 'EMAIL',
+    recipient: '',
+    subject: '',
+    body: '',
+  };
   assignMode: 'ROUND_ROBIN' | 'MANUAL' = 'ROUND_ROBIN';
   manualOwner = '';
 
@@ -1287,6 +1293,12 @@ export class AppComponent implements OnInit, OnDestroy {
     this.selectedOpp = null;
     this.selectedQuote = null;
     this.noteDraft = '';
+    this.messageForm = {
+      channel: 'WHATSAPP',
+      recipient: lead.phone || lead.email || '',
+      subject: '',
+      body: '',
+    };
     this.editingLead = false;
     this.duplicateHits = [];
     this.syncEditLeadForm(lead);
@@ -2537,6 +2549,73 @@ export class AppComponent implements OnInit, OnDestroy {
         this.setError(err, 'Failed to add note');
       },
     });
+  }
+
+  onMessageChannelChange(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    if (this.messageForm.channel === 'EMAIL') {
+      this.messageForm.recipient = this.selectedLead.email || this.messageForm.recipient;
+    } else {
+      this.messageForm.recipient = this.selectedLead.phone || this.selectedLead.email || this.messageForm.recipient;
+    }
+  }
+
+  useAiDraftForMessage(): void {
+    if (!this.selectedLead || !this.can('ai')) {
+      this.error = this.can('ai') ? 'Select a lead' : this.upgradeHint('AI');
+      return;
+    }
+    this.busy = true;
+    this.api.draftMessage(this.selectedLead.id, this.messageForm.channel).subscribe({
+      next: (ins) => {
+        this.busy = false;
+        this.messageForm.body = String(ins['body'] || ins['draft'] || this.messageForm.body);
+        this.lastInsight = ins;
+        this.message = 'AI draft loaded into compose';
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'AI draft failed');
+      },
+    });
+  }
+
+  sendLeadMessage(): void {
+    if (!this.selectedLead || !this.messageForm.body.trim()) {
+      this.error = 'Message body required';
+      return;
+    }
+    if (!this.canChannel(this.messageForm.channel)) {
+      this.error = this.upgradeHint(this.messageForm.channel);
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .sendMessage({
+        leadId: this.selectedLead.id,
+        channel: this.messageForm.channel,
+        recipient: this.messageForm.recipient || null,
+        subject: this.messageForm.subject || null,
+        body: this.messageForm.body.trim(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.busy = false;
+          const del = res['delivery'] as Record<string, unknown> | undefined;
+          this.message =
+            `Message ${res['eventType'] || 'queued'}` +
+            (del?.['status'] ? ` · ${del['status']}` : '');
+          this.messageForm.body = '';
+          this.loadTimeline(this.selectedLead!.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Send message failed');
+        },
+      });
   }
 
   moveLead(lead: Lead, stageId: number): void {

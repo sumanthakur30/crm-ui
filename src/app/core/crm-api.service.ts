@@ -299,6 +299,17 @@ export class CrmApiService {
     );
   }
 
+  sendMessage(body: {
+    leadId: number;
+    channel: string;
+    recipient?: string | null;
+    subject?: string | null;
+    body: string;
+    templateCode?: string | null;
+  }): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/messages/send`, body);
+  }
+
   listSequenceEnrollments(): Observable<Array<Record<string, unknown>>> {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/sequences/enrollments`);
   }
