@@ -540,30 +540,45 @@
   <ng-container *ngIf="module === 'insights'">
     <section class="panel compact">
       <div class="row between wrap">
-        <h2>Dashboard</h2>
+        <h2>
+          Dashboard
+          <span class="badge" *ngIf="dashboardScope">{{ dashboardScope }}</span>
+        </h2>
         <div class="row wrap">
           <button type="button" class="btn" (click)="loadInsights()">Refresh</button>
+          <button type="button" class="btn" (click)="downloadAnalyticsExport()">Export CSV</button>
           <button type="button" class="btn primary" (click)="processSla()">Process SLA aging</button>
         </div>
       </div>
+      <p class="hint" *ngIf="dashboardRolePack.length">
+        Role pack: {{ dashboardRolePack.join(', ') }}
+      </p>
       <div class="kpi-strip" *ngIf="analytics">
-        <div class="kpi">
+        <div class="kpi" *ngIf="showDashboardWidget('openLeads')">
+          <span class="kpi-label">Open leads</span>
+          <strong class="kpi-value">{{ dashboardKpis.openLeads }}</strong>
+        </div>
+        <div class="kpi" *ngIf="showDashboardWidget('hotLeads')">
+          <span class="kpi-label">Hot leads</span>
+          <strong class="kpi-value">{{ dashboardKpis.hotLeads }}</strong>
+        </div>
+        <div class="kpi" *ngIf="showDashboardWidget('openDeals')">
           <span class="kpi-label">Open deals</span>
           <strong class="kpi-value">{{ dashboardKpis.openDeals }}</strong>
         </div>
-        <div class="kpi">
+        <div class="kpi" *ngIf="showDashboardWidget('wonDeals')">
           <span class="kpi-label">Won</span>
           <strong class="kpi-value">{{ dashboardKpis.wonDeals }}</strong>
         </div>
-        <div class="kpi">
+        <div class="kpi" *ngIf="showDashboardWidget('pipelineAmount')">
           <span class="kpi-label">Pipeline ₹</span>
           <strong class="kpi-value">{{ dashboardKpis.pipelineAmount | number:'1.0-0' }}</strong>
         </div>
-        <div class="kpi">
+        <div class="kpi" *ngIf="showDashboardWidget('overdueTasks')">
           <span class="kpi-label">Overdue tasks</span>
           <strong class="kpi-value">{{ dashboardKpis.overdueTasks }}</strong>
         </div>
-        <div class="kpi muted-kpi">
+        <div class="kpi muted-kpi" *ngIf="showDashboardWidget('lostDeals')">
           <span class="kpi-label">Lost</span>
           <strong class="kpi-value">{{ dashboardKpis.lostDeals }}</strong>
         </div>
@@ -571,7 +586,7 @@
       <p class="hint" *ngIf="!analytics">Load analytics to see role dashboard KPIs.</p>
     </section>
     <div class="grid-3">
-      <section class="panel">
+      <section class="panel" *ngIf="showDashboardWidget('leadFunnel')">
         <h2>Lead funnel</h2>
         <ul class="member-list">
           <li *ngFor="let row of leadFunnel">
@@ -581,7 +596,7 @@
           <li *ngIf="!leadFunnel.length" class="muted">No lead data.</li>
         </ul>
       </section>
-      <section class="panel">
+      <section class="panel" *ngIf="showDashboardWidget('leadSources')">
         <h2>Lead sources</h2>
         <ul class="member-list">
           <li *ngFor="let row of leadSources">
@@ -591,7 +606,7 @@
           <li *ngIf="!leadSources.length" class="muted">No sources yet.</li>
         </ul>
       </section>
-      <section class="panel">
+      <section class="panel" *ngIf="showDashboardWidget('campaigns')">
         <h2>Campaigns</h2>
         <ul class="member-list">
           <li *ngFor="let row of campaignStats">
@@ -611,7 +626,7 @@
           <li *ngIf="!utmSources.length" class="muted">No UTM yet.</li>
         </ul>
       </section>
-      <section class="panel">
+      <section class="panel" *ngIf="showDashboardWidget('dealFunnel')">
         <h2>Open deal funnel</h2>
         <ul class="member-list">
           <li *ngFor="let row of dealFunnel">
@@ -621,9 +636,23 @@
           <li *ngIf="!dealFunnel.length" class="muted">No open deals.</li>
         </ul>
       </section>
-    </div>
-    <div class="grid-3" *ngIf="pipelineAnalytics">
       <section class="panel">
+        <h2>Report schedules</h2>
+        <button type="button" class="btn" (click)="loadReportSchedules()">Refresh</button>
+        <ul class="member-list">
+          <li *ngFor="let s of reportSchedules">
+            <strong>{{ s['code'] }}</strong>
+            <span class="badge">{{ s['reportType'] }}</span>
+            <span class="muted">{{ s['frequency'] }} · {{ s['lastRunAt'] ? ($any(s['lastRunAt']) | date: 'short') : 'never' }}</span>
+            <button type="button" class="btn" (click)="viewReportLastResult('' + s['code'])">Last result</button>
+          </li>
+          <li *ngIf="!reportSchedules.length" class="muted">No schedules — save one from Ops.</li>
+        </ul>
+        <pre class="ai-result" *ngIf="lastReportResult as lr">{{ lr | json }}</pre>
+      </section>
+    </div>
+    <div class="grid-3" *ngIf="pipelineAnalytics && (showDashboardWidget('agingBuckets') || showDashboardWidget('velocityByStage'))">
+      <section class="panel" *ngIf="showDashboardWidget('agingBuckets')">
         <h2>Deal aging</h2>
         <ul class="member-list">
           <li *ngFor="let b of pipelineRows('agingBuckets')">

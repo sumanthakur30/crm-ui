@@ -196,6 +196,14 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/analytics/summary`);
   }
 
+  analyticsDashboard(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/analytics/dashboard`);
+  }
+
+  exportAnalyticsCsv(): Observable<Blob> {
+    return this.http.get(`${this.base}/analytics/export.csv`, { responseType: 'blob' });
+  }
+
   pipelineAnalytics(): Observable<Record<string, unknown>> {
     return this.http.get<Record<string, unknown>>(`${this.base}/analytics/pipeline`);
   }
@@ -477,6 +485,14 @@ export class CrmApiService {
 
   runReports(): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/reports/run-due`, {});
+  }
+
+  listReportSchedules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/reports/schedules`);
+  }
+
+  getReportLastResult(code: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/reports/schedules/${code}/last-result`);
   }
 
   upsertReportSchedule(body: Record<string, unknown>): Observable<Record<string, unknown>> {

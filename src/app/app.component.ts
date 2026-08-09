@@ -270,13 +270,19 @@ export class AppComponent implements OnInit, OnDestroy {
   offlineReady = typeof navigator !== 'undefined' ? navigator.onLine : true;
   installPromptEvent: any = null;
   analytics: Record<string, unknown> | null = null;
+  dashboardScope = '';
+  dashboardRolePack: string[] = [];
   dashboardKpis = {
     openDeals: 0,
     wonDeals: 0,
     lostDeals: 0,
     overdueTasks: 0,
     pipelineAmount: 0,
+    openLeads: 0,
+    hotLeads: 0,
   };
+  reportSchedules: Array<Record<string, unknown>> = [];
+  lastReportResult: Record<string, unknown> | null = null;
   leadFunnel: Array<Record<string, unknown>> = [];
   leadSources: Array<Record<string, unknown>> = [];
   campaignStats: Array<Record<string, unknown>> = [];
@@ -1814,35 +1820,93 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   loadInsights(): void {
-    this.api.analyticsSummary().subscribe({
-      next: (s) => {
+    this.api.analyticsDashboard().subscribe({
+      next: (dash) => {
+        const s =
+          dash['summary'] && typeof dash['summary'] === 'object'
+            ? (dash['summary'] as Record<string, unknown>)
+            : dash;
         this.analytics = s;
+        this.dashboardScope = String(dash['scope'] || s['scope'] || '');
+        const pack = dash['rolePack'];
+        this.dashboardRolePack = Array.isArray(pack) ? (pack as string[]) : [];
         this.leadFunnel = this.asRows(s, 'leadFunnel');
         this.leadSources = this.asRows(s, 'leadSources');
         this.campaignStats = this.asRows(s, 'campaigns');
         this.utmSources = this.asRows(s, 'utmSources');
         this.dealFunnel = this.asRows(s, 'dealFunnel');
-        const pipelineAmount = this.dealFunnel.reduce((sum, row) => {
-          const n = Number(row['amount']);
-          return sum + (Number.isFinite(n) ? n : 0);
-        }, 0);
+        const kpis =
+          dash['kpis'] && typeof dash['kpis'] === 'object'
+            ? (dash['kpis'] as Record<string, unknown>)
+            : {};
         this.dashboardKpis = {
-          openDeals: Number(s['openDeals'] ?? 0),
-          wonDeals: Number(s['wonDeals'] ?? 0),
-          lostDeals: Number(s['lostDeals'] ?? 0),
-          overdueTasks: Number(s['overdueTasks'] ?? 0),
-          pipelineAmount,
+          openDeals: Number(kpis['openDeals'] ?? s['openDeals'] ?? 0),
+          wonDeals: Number(kpis['wonDeals'] ?? s['wonDeals'] ?? 0),
+          lostDeals: Number(kpis['lostDeals'] ?? s['lostDeals'] ?? 0),
+          overdueTasks: Number(kpis['overdueTasks'] ?? s['overdueTasks'] ?? 0),
+          pipelineAmount: Number(kpis['pipelineAmount'] ?? 0),
+          openLeads: Number(kpis['openLeads'] ?? s['openLeads'] ?? 0),
+          hotLeads: Number(kpis['hotLeads'] ?? s['hotLeads'] ?? 0),
         };
+        if (dash['pipeline'] && typeof dash['pipeline'] === 'object') {
+          this.pipelineAnalytics = dash['pipeline'] as Record<string, unknown>;
+        } else if (this.dashboardScope === 'OWN') {
+          this.pipelineAnalytics = null;
+        } else {
+          this.api.pipelineAnalytics().subscribe({
+            next: (p) => (this.pipelineAnalytics = p || null),
+            error: () => (this.pipelineAnalytics = null),
+          });
+        }
       },
-      error: (err) => this.setError(err, 'Analytics failed'),
-    });
-    this.api.pipelineAnalytics().subscribe({
-      next: (p) => (this.pipelineAnalytics = p || null),
-      error: () => (this.pipelineAnalytics = null),
+      error: (err) => this.setError(err, 'Analytics dashboard failed'),
     });
     this.api.listOpenTasks().subscribe({
       next: (t) => (this.openTasks = t || []),
       error: () => (this.openTasks = []),
+    });
+    this.loadReportSchedules();
+  }
+
+  showDashboardWidget(key: string): boolean {
+    if (!this.dashboardRolePack.length) {
+      return true;
+    }
+    return this.dashboardRolePack.includes(key);
+  }
+
+  downloadAnalyticsExport(): void {
+    this.api.exportAnalyticsCsv().subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'crm-analytics.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        this.message = 'Analytics CSV downloaded';
+      },
+      error: (err) => this.setError(err, 'Export failed'),
+    });
+  }
+
+  loadReportSchedules(): void {
+    this.api.listReportSchedules().subscribe({
+      next: (rows) => (this.reportSchedules = rows || []),
+      error: () => (this.reportSchedules = []),
+    });
+  }
+
+  viewReportLastResult(code: string): void {
+    if (!code) {
+      return;
+    }
+    this.api.getReportLastResult(code).subscribe({
+      next: (r) => {
+        this.lastReportResult = r || null;
+        this.message = `Loaded last result for ${code}`;
+      },
+      error: (err) => this.setError(err, 'Load report result failed'),
     });
   }
 
@@ -2536,6 +2600,7 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.message = 'Report schedule saved';
+          this.loadReportSchedules();
         },
         error: (err) => this.setError(err, 'Schedule failed'),
       });
@@ -2544,7 +2609,8 @@ export class AppComponent implements OnInit, OnDestroy {
   runReports(): void {
     this.api.runReports().subscribe({
       next: (r) => {
-        this.message = `Reports ran: ${r['ran']}`;
+        this.message = `Reports ran: ${r['ran']} (skipped ${r['skipped'] ?? 0})`;
+        this.loadReportSchedules();
       },
       error: (err) => this.setError(err, 'Run reports failed'),
     });
