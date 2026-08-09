@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 5 · Sprint 3 — Customer 360 ERP · quote→order</p>
+      <p class="tag">Phase 5 · Sprint 4 — My Day · unified activities</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -52,6 +52,7 @@
         <button type="button" class="btn ghost" (click)="reloadAll()">Refresh</button>
       </div>
       <nav class="module-tabs">
+        <a routerLink="/home" routerLinkActive="primary" class="btn" [class.primary]="module === 'home'">My Day</a>
         <a routerLink="/leads" routerLinkActive="primary" class="btn" [class.primary]="module === 'leads'">Leads</a>
         <a routerLink="/deals" routerLinkActive="primary" class="btn" [class.primary]="module === 'deals'">Deals</a>
         <a
@@ -105,6 +106,85 @@
       Some modules are locked by subscription — upgrade in Super Admin → Platform Subscription.
     </p>
   </section>
+
+  <!-- ========== MY DAY ========== -->
+  <ng-container *ngIf="module === 'home'">
+    <div class="row wrap" style="margin-bottom: 0.75rem">
+      <button type="button" class="btn" (click)="loadMyDay()">Refresh</button>
+      <button type="button" class="btn" (click)="processSla()">Process SLA aging</button>
+      <span class="muted" *ngIf="myDay as d">{{ d['timezone'] }} · as of {{ $any(d['asOf']) | date: 'short' }}</span>
+    </div>
+    <div class="grid-3">
+      <section class="panel">
+        <h2>Overdue <span class="badge warn">{{ myDayCount('overdueTasks') }}</span></h2>
+        <ul class="member-list">
+          <li *ngFor="let t of myDayRows('overdueTasks')">
+            <strong>{{ t['title'] }}</strong>
+            <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }} · {{ $any(t['dueAt']) | date: 'short' }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+          </li>
+          <li *ngIf="!myDayRows('overdueTasks').length" class="muted">Nothing overdue.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Due today <span class="badge">{{ myDayCount('dueToday') }}</span></h2>
+        <ul class="member-list">
+          <li *ngFor="let t of myDayRows('dueToday')">
+            <strong>{{ t['title'] }}</strong>
+            <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+          </li>
+          <li *ngIf="!myDayRows('dueToday').length" class="muted">No tasks due today.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Meetings today <span class="badge">{{ myDayCount('meetingsToday') }}</span></h2>
+        <ul class="member-list">
+          <li *ngFor="let m of myDayRows('meetingsToday')">
+            <strong>{{ m['title'] }}</strong>
+            <span class="muted">{{ $any(m['startsAt']) | date: 'shortTime' }} · {{ m['relatedType'] }} #{{ m['relatedId'] }}</span>
+          </li>
+          <li *ngIf="!myDayRows('meetingsToday').length" class="muted">No meetings scheduled today.</li>
+        </ul>
+      </section>
+    </div>
+    <div class="grid-2">
+      <section class="panel">
+        <h2>Hot leads <span class="badge">{{ myDayCount('hotLeads') }}</span></h2>
+        <ul class="member-list">
+          <li *ngFor="let L of myDayRows('hotLeads')" class="clickable" (click)="openMyDayLead(+$any(L['id']))">
+            <strong>#{{ L['id'] }} {{ L['title'] }}</strong>
+            <span class="badge">score {{ L['score'] }}</span>
+            <span class="muted">{{ L['displayName'] || L['companyName'] || '—' }}</span>
+          </li>
+          <li *ngIf="!myDayRows('hotLeads').length" class="muted">No open leads at/above score 70.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Open approvals <span class="badge">{{ myDayCount('openApprovals') }}</span></h2>
+        <ul class="member-list">
+          <li *ngFor="let a of myDayRows('openApprovals')">
+            <strong>{{ a['title'] }}</strong>
+            <span class="muted">{{ a['objectType'] }} #{{ a['objectId'] }}</span>
+            <button type="button" class="btn" (click)="decide(+$any(a['id']), true)">Approve</button>
+            <button type="button" class="btn ghost" (click)="decide(+$any(a['id']), false)">Reject</button>
+          </li>
+          <li *ngIf="!myDayRows('openApprovals').length" class="muted">No pending approvals.</li>
+        </ul>
+      </section>
+    </div>
+    <section class="panel">
+      <h2>Recent activities</h2>
+      <ul class="member-list">
+        <li *ngFor="let a of myDayActivities">
+          <span class="badge">{{ a['type'] }}</span>
+          <strong>{{ a['title'] }}</strong>
+          <span class="muted">{{ a['relatedType'] }} #{{ a['relatedId'] }} · {{ $any(a['occurredAt']) | date: 'short' }}</span>
+        </li>
+        <li *ngIf="!myDayActivities.length" class="muted">No recent tasks/meetings/calls/notes in window.</li>
+      </ul>
+    </section>
+  </ng-container>
 
   <!-- ========== LEADS ========== -->
   <ng-container *ngIf="module === 'leads'">

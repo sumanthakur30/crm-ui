@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 
 export type CrmModuleId =
+  | 'home'
   | 'leads'
   | 'deals'
   | 'quotes'
@@ -13,6 +14,7 @@ export type CrmModuleId =
   | 'enterprise';
 
 export const CRM_MODULES: CrmModuleId[] = [
+  'home',
   'leads',
   'deals',
   'quotes',
@@ -26,7 +28,7 @@ export const CRM_MODULES: CrmModuleId[] = [
 
 @Injectable({ providedIn: 'root' })
 export class CrmNavService {
-  private readonly moduleSubject = new BehaviorSubject<CrmModuleId>('leads');
+  private readonly moduleSubject = new BehaviorSubject<CrmModuleId>('home');
   readonly module$ = this.moduleSubject.asObservable();
 
   get module(): CrmModuleId {

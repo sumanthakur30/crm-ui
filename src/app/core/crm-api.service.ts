@@ -207,6 +207,43 @@ export class CrmApiService {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/tasks`);
   }
 
+  completeTask(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/tasks/${id}/complete`, {});
+  }
+
+  myDay(hotMinScore?: number, hotLimit?: number): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (hotMinScore != null) {
+      params = params.set('hotMinScore', hotMinScore);
+    }
+    if (hotLimit != null) {
+      params = params.set('hotLimit', hotLimit);
+    }
+    return this.http.get<Record<string, unknown>>(`${this.base}/my-day`, { params });
+  }
+
+  listActivities(opts?: {
+    from?: string;
+    to?: string;
+    types?: string;
+    limit?: number;
+  }): Observable<Array<Record<string, unknown>>> {
+    let params = new HttpParams();
+    if (opts?.from) {
+      params = params.set('from', opts.from);
+    }
+    if (opts?.to) {
+      params = params.set('to', opts.to);
+    }
+    if (opts?.types) {
+      params = params.set('types', opts.types);
+    }
+    if (opts?.limit != null) {
+      params = params.set('limit', opts.limit);
+    }
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/activities`, { params });
+  }
+
   convertLead(id: number, targetSystem: string): Observable<Record<string, unknown>> {
     const params = new HttpParams().set('targetSystem', targetSystem);
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert`, {}, { params });

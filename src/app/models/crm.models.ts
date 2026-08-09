@@ -159,6 +159,7 @@ export interface EntitlementsSnapshot {
   checksEnabled: boolean;
   features: Record<string, boolean>;
   modules: {
+    home?: boolean;
     leads?: boolean;
     deals?: boolean;
     accounts?: boolean;

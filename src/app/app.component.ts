@@ -45,7 +45,7 @@ export interface DealKanbanColumn {
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'SugamFlow CRM';
-  module: CrmModuleId = 'leads';
+  module: CrmModuleId = 'home';
   private navSub: Subscription | null = null;
   view: 'list' | 'kanban' = 'kanban';
   /** Cached for template — getters that allocate each CD cycle freeze Chrome ("Page Unresponsive"). */
@@ -277,6 +277,8 @@ export class AppComponent implements OnInit, OnDestroy {
   utmSources: Array<Record<string, unknown>> = [];
   dealFunnel: Array<Record<string, unknown>> = [];
   openTasks: Array<Record<string, unknown>> = [];
+  myDay: Record<string, unknown> | null = null;
+  myDayActivities: Array<Record<string, unknown>> = [];
   forecast: Record<string, unknown> | null = null;
   forecastCommitForm = { periodYm: '', amount: 0, note: '' };
 
@@ -426,8 +428,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.api.entitlements().subscribe({
       next: (snap) => {
         this.entitlements = snap;
-        if (snap.checksEnabled && this.module !== 'leads' && !this.can(this.module as keyof NonNullable<EntitlementsSnapshot['modules']>)) {
-          this.module = 'leads';
+        if (snap.checksEnabled && this.module !== 'home' && this.module !== 'leads' && !this.can(this.module as keyof NonNullable<EntitlementsSnapshot['modules']>)) {
+          this.module = 'home';
         }
       },
       error: () => {
@@ -502,7 +504,7 @@ export class AppComponent implements OnInit, OnDestroy {
                 : null;
     if (gateKey && !this.can(gateKey)) {
       if (!fromClick) {
-        void this.router.navigate(['/leads']);
+        void this.router.navigate(['/home']);
       }
       this.error = this.upgradeHint(m);
       return;
@@ -518,7 +520,9 @@ export class AppComponent implements OnInit, OnDestroy {
       this.selectedOpp = null;
       this.selectedQuote = null;
     }
-    if (m === 'deals') {
+    if (m === 'home') {
+      this.loadMyDay();
+    } else if (m === 'deals') {
       this.loadOpportunities();
     } else if (m === 'quotes') {
       this.loadOpportunities();
@@ -1592,8 +1596,70 @@ export class AppComponent implements OnInit, OnDestroy {
       next: (r) => {
         this.message = `SLA: created ${r.tasksCreated}, overdue open ${r.openOverdueTasks}`;
         this.loadInsights();
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
       },
       error: (err) => this.setError(err, 'SLA process failed'),
+    });
+  }
+
+  loadMyDay(): void {
+    this.api.myDay().subscribe({
+      next: (snap) => {
+        this.myDay = snap || null;
+        const recent = snap?.['recentActivities'];
+        this.myDayActivities = Array.isArray(recent) ? (recent as Array<Record<string, unknown>>) : [];
+      },
+      error: (err) => {
+        this.myDay = null;
+        this.myDayActivities = [];
+        this.setError(err, 'Failed to load My Day');
+      },
+    });
+  }
+
+  myDayRows(key: string): Array<Record<string, unknown>> {
+    return this.asRows(this.myDay, key);
+  }
+
+  myDayCount(key: string): number {
+    const counts = this.myDay?.['counts'];
+    if (counts && typeof counts === 'object') {
+      return Number((counts as Record<string, unknown>)[key] ?? 0);
+    }
+    return 0;
+  }
+
+  completeMyDayTask(taskId: number): void {
+    if (!taskId) {
+      return;
+    }
+    this.busy = true;
+    this.api.completeTask(taskId).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Task #${taskId} done`;
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Complete task failed');
+      },
+    });
+  }
+
+  openMyDayLead(leadId: number): void {
+    if (!leadId) {
+      return;
+    }
+    this.api.getLead(leadId).subscribe({
+      next: (lead) => {
+        void this.router.navigate(['/leads']);
+        this.applyModule('leads', true);
+        this.openLead(lead);
+      },
+      error: (err) => this.setError(err, 'Open lead failed'),
     });
   }
 
@@ -2092,6 +2158,9 @@ export class AppComponent implements OnInit, OnDestroy {
       next: () => {
         this.message = approve ? 'Approved' : 'Rejected';
         this.loadOps();
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
         if (this.selectedQuote) {
           this.loadQuotesForOpp(this.selectedQuote.opportunityId);
           this.api.listQuotationsForOpportunity(this.selectedQuote.opportunityId).subscribe({
