@@ -41,6 +41,7 @@ export interface Lead {
   status?: string | null;
   priority?: string | null;
   score: number;
+  scoreBand?: string | null;
   ownerUserId?: string | null;
   teamId?: string | null;
   amount?: number | null;
@@ -51,6 +52,7 @@ export interface Lead {
   utmCampaign?: string | null;
   utmContent?: string | null;
   utmTerm?: string | null;
+  attributes?: Record<string, unknown>;
   externalRefs?: Record<string, unknown>;
   accountId?: number | null;
   contactId?: number | null;

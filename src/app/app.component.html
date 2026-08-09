@@ -157,7 +157,9 @@
             <span class="badge">score {{ L['score'] }}</span>
             <span class="muted">{{ L['displayName'] || L['companyName'] || '—' }}</span>
           </li>
-          <li *ngIf="!myDayRows('hotLeads').length" class="muted">No open leads at/above score 70.</li>
+          <li *ngIf="!myDayRows('hotLeads').length" class="muted">
+            No open leads at/above score {{ myDay?.['hotMinScore'] || scoreBandForm.hotMin || 70 }}.
+          </li>
         </ul>
       </section>
       <section class="panel">
@@ -282,6 +284,10 @@
             <strong>{{ lead.title }}</strong>
             <p>{{ lead.displayName || lead.companyName || '—' }}</p>
             <p class="muted">{{ lead.ownerUserId || 'Unassigned' }}</p>
+            <p>
+              <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.scoreBand || '—' }}</span>
+              <span class="muted"> · {{ lead.score }}</span>
+            </p>
             <div class="move" (click)="$event.stopPropagation()">
               <select
                 [value]="lead.stageId"
@@ -1073,13 +1079,68 @@
     <div class="grid-3">
       <section class="panel">
         <h2>Score rules</h2>
+        <p class="hint">Points applied when matching behavior events fire.</p>
+        <button type="button" class="btn" (click)="reloadScoreRules()">Refresh</button>
         <ul class="member-list">
           <li *ngFor="let r of scoreRules">
             <strong>{{ r['code'] }}</strong>
-            <span class="muted">{{ r['eventType'] }} · {{ r['points'] }} pts</span>
+            <span class="muted">{{ r['eventType'] }}</span>
+            <span class="badge" [class.warn]="!r['active']">{{ r['active'] ? 'ON' : 'OFF' }}</span>
+            <input
+              type="number"
+              style="width: 4rem"
+              [(ngModel)]="r['points']"
+              [name]="'pts' + r['id']"
+            />
+            <button type="button" class="btn" [disabled]="busy" (click)="saveScoreRulePoints(r)">Save</button>
+            <button type="button" class="btn" [disabled]="busy" (click)="toggleScoreRule(r)">
+              {{ r['active'] ? 'Disable' : 'Enable' }}
+            </button>
           </li>
+          <li *ngIf="!scoreRules.length" class="muted">No rules — ensure defaults from Ops load.</li>
+        </ul>
+        <div class="form" style="margin-top: 0.75rem">
+          <input [(ngModel)]="scoreRuleDraft.code" name="srCode" placeholder="CODE" />
+          <input [(ngModel)]="scoreRuleDraft.name" name="srName" placeholder="Name" />
+          <input [(ngModel)]="scoreRuleDraft.eventType" name="srEvt" placeholder="EVENT_TYPE" />
+          <input type="number" [(ngModel)]="scoreRuleDraft.points" name="srPts" />
+          <button type="button" class="btn primary" [disabled]="busy" (click)="createScoreRule()">Add rule</button>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Hot / Warm / Cold</h2>
+        <p class="hint">My Day hot leads use Hot ≥ threshold.</p>
+        <label>
+          Hot min
+          <input type="number" [(ngModel)]="scoreBandForm.hotMin" name="hotMin" />
+        </label>
+        <label>
+          Warm min
+          <input type="number" [(ngModel)]="scoreBandForm.warmMin" name="warmMin" />
+        </label>
+        <button type="button" class="btn primary" [disabled]="busy" (click)="saveScoreBands()">Save bands</button>
+        <p class="muted" *ngIf="scoreBands as b">
+          Hot ≥ {{ b['hotMin'] }} · Warm ≥ {{ b['warmMin'] }} · else Cold
+        </p>
+      </section>
+      <section class="panel">
+        <h2>Qualification schemas</h2>
+        <p class="hint">Default BANT checklist; answers stored on the lead.</p>
+        <button type="button" class="btn" (click)="loadQualificationSchemas()">Refresh</button>
+        <ul class="member-list">
+          <li *ngFor="let s of qualificationSchemas">
+            <strong>{{ s['code'] }}</strong>
+            <span class="muted">{{ s['name'] }}</span>
+            <span class="badge">{{ s['active'] ? 'ON' : 'OFF' }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="toggleQualificationSchema(s)">
+              {{ s['active'] ? 'Disable' : 'Enable' }}
+            </button>
+          </li>
+          <li *ngIf="!qualificationSchemas.length" class="muted">No schemas loaded yet.</li>
         </ul>
       </section>
+    </div>
+    <div class="grid-3" style="margin-top: 1rem">
       <section class="panel">
         <h2>Reports + ACL</h2>
         <input [(ngModel)]="reportCode" name="repCode" placeholder="DAILY_FUNNEL" />
@@ -1396,7 +1457,10 @@
 
   <section>
     <h3>Score / call / meeting</h3>
-    <p class="hint">Score: {{ lead.score }}</p>
+    <p class="hint">
+      Score: {{ lead.score }}
+      <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.scoreBand || '—' }}</span>
+    </p>
     <div class="row wrap">
       <button type="button" class="btn" (click)="rescoreSelected()">Rescore</button>
       <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
@@ -1429,6 +1493,34 @@
       <strong>{{ ins['title'] }}</strong>
       <pre>{{ ins['body'] }}</pre>
     </div>
+  </section>
+
+  <section>
+    <h3>Qualification</h3>
+    <p class="hint">BANT (or tenant schema) answers on this lead.</p>
+    <select [(ngModel)]="qualificationSchemaCode" name="qualSchema" (ngModelChange)="qualificationAnswers = {}">
+      <option *ngFor="let s of qualificationSchemas" [value]="s['code']">{{ s['code'] }} — {{ s['name'] }}</option>
+    </select>
+    <div class="form" *ngIf="activeQualificationFields().length; else noQualFields">
+      <label *ngFor="let f of activeQualificationFields()">
+        {{ f['label'] || f['key'] }}
+        <textarea
+          *ngIf="f['type'] === 'textarea'"
+          rows="2"
+          [(ngModel)]="qualificationAnswers[$any(f['key'])]"
+          [name]="'qual-ta-' + f['key']"
+        ></textarea>
+        <input
+          *ngIf="f['type'] !== 'textarea'"
+          [(ngModel)]="qualificationAnswers[$any(f['key'])]"
+          [name]="'qual-in-' + f['key']"
+        />
+      </label>
+      <button type="button" class="btn primary" [disabled]="busy" (click)="saveLeadQualification()">Save qualification</button>
+    </div>
+    <ng-template #noQualFields>
+      <p class="muted">Load Ops → Qualification schemas (default BANT), then reopen lead.</p>
+    </ng-template>
   </section>
 
   <section>

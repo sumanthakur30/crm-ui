@@ -296,6 +296,12 @@ export class AppComponent implements OnInit, OnDestroy {
   fieldAcl: Array<Record<string, unknown>> = [];
   adapterEvents: Array<Record<string, unknown>> = [];
   scoreRules: Array<Record<string, unknown>> = [];
+  scoreBands: Record<string, unknown> | null = null;
+  scoreBandForm = { hotMin: 70, warmMin: 40 };
+  scoreRuleDraft = { code: '', name: '', eventType: '', points: 5 };
+  qualificationSchemas: Array<Record<string, unknown>> = [];
+  qualificationAnswers: Record<string, string> = {};
+  qualificationSchemaCode = 'BANT';
   stageAutomationRules: Array<Record<string, unknown>> = [];
   stageRuleForm = {
     objectType: 'OPPORTUNITY' as 'LEAD' | 'OPPORTUNITY',
@@ -1104,6 +1110,237 @@ export class AppComponent implements OnInit, OnDestroy {
       });
   }
 
+  loadScoreBands(): void {
+    this.api.getScoreBands().subscribe({
+      next: (b) => {
+        this.scoreBands = b || null;
+        this.scoreBandForm = {
+          hotMin: Number(b?.['hotMin'] ?? 70),
+          warmMin: Number(b?.['warmMin'] ?? 40),
+        };
+      },
+      error: () => (this.scoreBands = null),
+    });
+  }
+
+  saveScoreBands(): void {
+    this.busy = true;
+    this.api.updateScoreBands(this.scoreBandForm).subscribe({
+      next: (b) => {
+        this.busy = false;
+        this.scoreBands = b;
+        this.message = `Score bands: Hot ≥ ${b['hotMin']}, Warm ≥ ${b['warmMin']}`;
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Save score bands failed');
+      },
+    });
+  }
+
+  reloadScoreRules(): void {
+    this.api.ensureScoreRules().subscribe({
+      next: (r) => (this.scoreRules = r || []),
+      error: () => (this.scoreRules = []),
+    });
+  }
+
+  saveScoreRulePoints(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        id,
+        code: rule['code'],
+        name: rule['name'],
+        eventType: rule['eventType'],
+        points: Number(rule['points'] ?? 0),
+        active: rule['active'] !== false,
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${rule['code']} saved`;
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update score rule failed');
+        },
+      });
+  }
+
+  toggleScoreRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        id,
+        code: rule['code'],
+        name: rule['name'],
+        eventType: rule['eventType'],
+        points: Number(rule['points'] ?? 0),
+        active: !rule['active'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${rule['code']} ${rule['active'] ? 'disabled' : 'enabled'}`;
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Toggle score rule failed');
+        },
+      });
+  }
+
+  createScoreRule(): void {
+    const code = (this.scoreRuleDraft.code || '').trim().toUpperCase();
+    const eventType = (this.scoreRuleDraft.eventType || '').trim().toUpperCase();
+    if (!code || !eventType) {
+      this.error = 'Score rule code and event type required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        code,
+        name: this.scoreRuleDraft.name || code,
+        eventType,
+        points: Number(this.scoreRuleDraft.points) || 0,
+        active: true,
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${code} created`;
+          this.scoreRuleDraft = { code: '', name: '', eventType: '', points: 5 };
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Create score rule failed');
+        },
+      });
+  }
+
+  loadQualificationSchemas(): void {
+    this.api.listQualificationSchemas().subscribe({
+      next: (rows) => (this.qualificationSchemas = rows || []),
+      error: () => (this.qualificationSchemas = []),
+    });
+  }
+
+  toggleQualificationSchema(schema: Record<string, unknown>): void {
+    const id = Number(schema['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertQualificationSchema({
+        id,
+        code: schema['code'],
+        name: schema['name'],
+        active: !schema['active'],
+        fields: schema['fields'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Schema ${schema['code']} ${schema['active'] ? 'disabled' : 'enabled'}`;
+          this.loadQualificationSchemas();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update qualification schema failed');
+        },
+      });
+  }
+
+  scoreBandClass(band: string | null | undefined): string {
+    const b = (band || '').toUpperCase();
+    if (b === 'HOT') {
+      return 'badge band-hot';
+    }
+    if (b === 'WARM') {
+      return 'badge band-warm';
+    }
+    if (b === 'COLD') {
+      return 'badge band-cold';
+    }
+    return 'badge';
+  }
+
+  activeQualificationFields(): Array<Record<string, unknown>> {
+    const schema =
+      this.qualificationSchemas.find((s) => s['code'] === this.qualificationSchemaCode) ||
+      this.qualificationSchemas[0];
+    const fields = schema?.['fields'];
+    return Array.isArray(fields) ? (fields as Array<Record<string, unknown>>) : [];
+  }
+
+  initQualificationFromLead(lead: Lead | null): void {
+    this.qualificationAnswers = {};
+    if (!lead) {
+      return;
+    }
+    const qual = lead.attributes?.['qualification'];
+    if (qual && typeof qual === 'object') {
+      const q = qual as Record<string, unknown>;
+      if (typeof q['schemaCode'] === 'string' && q['schemaCode']) {
+        this.qualificationSchemaCode = String(q['schemaCode']);
+      }
+      const answers = q['answers'];
+      if (answers && typeof answers === 'object') {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(answers as Record<string, unknown>)) {
+          out[k] = v == null ? '' : String(v);
+        }
+        this.qualificationAnswers = out;
+      }
+    }
+  }
+
+  saveLeadQualification(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const answers: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.qualificationAnswers)) {
+      answers[k] = v;
+    }
+    this.busy = true;
+    this.api
+      .saveLeadQualification(this.selectedLead.id, {
+        schemaCode: this.qualificationSchemaCode || 'BANT',
+        answers,
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.selectedLead = lead;
+          this.initQualificationFromLead(lead);
+          this.message = 'Qualification saved';
+          this.loadTimeline(lead.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Save qualification failed');
+        },
+      });
+  }
+
   mergeDuplicateIntoSelected(dupId: number): void {
     if (!this.selectedLead || !dupId) {
       return;
@@ -1303,6 +1540,10 @@ export class AppComponent implements OnInit, OnDestroy {
     this.duplicateHits = [];
     this.syncEditLeadForm(lead);
     this.resetPartyConvertForm(lead);
+    this.initQualificationFromLead(lead);
+    if (!this.qualificationSchemas.length) {
+      this.loadQualificationSchemas();
+    }
     this.loadTimeline(lead.id);
     this.loadLeadInsights();
     this.loadLeadHygiene(lead.id);
@@ -1873,6 +2114,8 @@ export class AppComponent implements OnInit, OnDestroy {
       next: (r) => (this.scoreRules = r || []),
       error: () => (this.scoreRules = []),
     });
+    this.loadScoreBands();
+    this.loadQualificationSchemas();
     if (this.can('automation')) {
       this.api.listStageAutomationRules().subscribe({
         next: (r) => (this.stageAutomationRules = r || []),

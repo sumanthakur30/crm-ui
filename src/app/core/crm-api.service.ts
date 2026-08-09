@@ -386,6 +386,37 @@ export class CrmApiService {
     return this.http.post<Array<Record<string, unknown>>>(`${this.base}/scoring/rules/ensure-defaults`, {});
   }
 
+  listScoreRules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/scoring/rules`);
+  }
+
+  upsertScoreRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/scoring/rules`, body);
+  }
+
+  getScoreBands(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/scoring/bands`);
+  }
+
+  updateScoreBands(body: { hotMin: number; warmMin: number }): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/scoring/bands`, body);
+  }
+
+  listQualificationSchemas(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/qualification/schemas`);
+  }
+
+  upsertQualificationSchema(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/qualification/schemas`, body);
+  }
+
+  saveLeadQualification(
+    leadId: number,
+    body: { schemaCode: string; answers: Record<string, unknown> }
+  ): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/qualification/leads/${leadId}`, body);
+  }
+
   scoreEvent(leadId: number, eventType: string, summary?: string): Observable<Lead> {
     return this.http.post<Lead>(`${this.base}/scoring/leads/${leadId}/events`, { eventType, summary });
   }
