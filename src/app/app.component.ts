@@ -340,6 +340,9 @@ export class AppComponent implements OnInit, OnDestroy {
   ssoAuthorizeUrl = '';
   meters: Record<string, unknown> | null = null;
   seatsDraft = 0;
+  aiStatusInfo: Record<string, unknown> | null = null;
+  aiProviderLabel = '';
+  territories: Array<Record<string, unknown>> = [];
   auditExports: Array<Record<string, unknown>> = [];
   aiInsights: Array<Record<string, unknown>> = [];
   lastInsight: Record<string, unknown> | null = null;
@@ -560,6 +563,8 @@ export class AppComponent implements OnInit, OnDestroy {
     } else if (m === 'enterprise') {
       this.loadEnterprise();
       this.loadDuplicateRules();
+      this.loadAiStatus();
+      this.loadTerritories();
       if (this.selectedLead) {
         this.loadLeadInsights();
       }
@@ -643,15 +648,35 @@ export class AppComponent implements OnInit, OnDestroy {
         this.inboundSigningEnabled = !!s.inboundSigningEnabled;
         this.orderEnabled = !!s.orderEnabled;
         this.orderProductMapped = !!s.orderProductMapped;
+        this.aiProviderLabel = s.aiProvider || '';
         this.message =
           `${s.service} phase ${s.phase}` +
           (s.convertEnabled ? ' · convert on' : ' · convert off') +
           (s.orderEnabled ? ' · order on' : ' · order off') +
           (s.ctiEnabled ? ' · CTI on' : ' · CTI off') +
+          (s.aiProvider ? ` · AI ${s.aiProvider}` : '') +
           (s.inboundSigningEnabled ? ' · inbound signing on' : ' · inbound signing off');
         this.error = '';
       },
       error: (err) => this.setError(err, 'Status check failed — is crm-service on :8095?'),
+    });
+  }
+
+  loadAiStatus(): void {
+    if (!this.can('ai')) {
+      this.aiStatusInfo = null;
+      return;
+    }
+    this.api.aiStatus().subscribe({
+      next: (s) => (this.aiStatusInfo = s || null),
+      error: () => (this.aiStatusInfo = null),
+    });
+  }
+
+  loadTerritories(): void {
+    this.api.listTerritories().subscribe({
+      next: (rows) => (this.territories = rows || []),
+      error: () => (this.territories = []),
     });
   }
 

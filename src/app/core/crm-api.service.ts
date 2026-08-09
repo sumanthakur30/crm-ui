@@ -640,6 +640,14 @@ export class CrmApiService {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/ai/insights`, { params });
   }
 
+  aiStatus(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/ai/status`);
+  }
+
+  listTerritories(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/labs/territories`);
+  }
+
   // —— Phase 4 Enterprise ——
   enterpriseSettings(): Observable<Record<string, unknown>> {
     return this.http.get<Record<string, unknown>>(`${this.base}/enterprise/settings`);

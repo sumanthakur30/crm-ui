@@ -154,6 +154,8 @@ export interface StatusResponse {
   inboundSigningEnabled?: boolean;
   orderEnabled?: boolean;
   orderProductMapped?: boolean;
+  aiProvider?: string;
+  ctiProvider?: string;
 }
 
 /** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */

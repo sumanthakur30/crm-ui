@@ -971,6 +971,7 @@
         Seats {{ $any(m['seats'])?.used ?? 0 }} / {{ $any(m['seats'])?.limit ?? '∞' }}
         · API {{ $any(m['apiCallsMonth'])?.used ?? 0 }} / {{ $any(m['apiCallsMonth'])?.limit ?? '∞' }}
         ({{ $any(m['apiCallsMonth'])?.period }})
+        · AI {{ $any(m['aiCallsMonth'])?.used ?? 0 }} / {{ $any(m['aiCallsMonth'])?.limit ?? '∞' }}
         · enforce {{ m['enforcementEnabled'] ? 'on' : 'off' }}
       </p>
       <div class="row wrap">
@@ -1263,11 +1264,24 @@
           <p class="hint" *ngIf="meters as m">
             Meters · seats {{ $any(m['seats'])?.used ?? 0 }}/{{ $any(m['seats'])?.limit ?? '∞' }}
             · API {{ $any(m['apiCallsMonth'])?.used ?? 0 }}/{{ $any(m['apiCallsMonth'])?.limit ?? '∞' }}
+            · AI {{ $any(m['aiCallsMonth'])?.used ?? 0 }}/{{ $any(m['aiCallsMonth'])?.limit ?? '∞' }}
           </p>
         </div>
         <ng-template #loadEnt>
           <button type="button" class="btn" (click)="loadEnterprise()">Load settings</button>
         </ng-template>
+      </section>
+      <section class="panel">
+        <h2>Territories (labs)</h2>
+        <p class="hint">Read-only V21 scaffold — assignment engine deferred.</p>
+        <button type="button" class="btn" (click)="loadTerritories()">Refresh</button>
+        <ul class="member-list">
+          <li *ngFor="let t of territories">
+            <strong>{{ t['code'] }}</strong>
+            <span class="muted">{{ t['name'] }} · {{ t['regionCode'] || '—' }}</span>
+          </li>
+          <li *ngIf="!territories.length" class="muted">No territories seeded yet.</li>
+        </ul>
       </section>
       <section class="panel">
         <h2>Audit export</h2>
@@ -1302,6 +1316,13 @@
       <section class="panel">
         <h2>AI assist</h2>
         <p class="hint">Uses selected lead (#{{ selectedLead?.id || 'none' }}) and preferred language.</p>
+        <p class="hint" *ngIf="aiStatusInfo as st">
+          Provider {{ st['provider'] }} · model {{ st['modelCode'] }}
+          · {{ st['enabled'] ? 'enabled' : 'disabled' }}
+          · HTTP {{ st['httpConfigured'] ? 'ready' : 'n/a' }}
+        </p>
+        <p class="hint" *ngIf="!aiStatusInfo && aiProviderLabel">Workspace AI provider: {{ aiProviderLabel }}</p>
+        <button type="button" class="btn" [disabled]="!can('ai')" (click)="loadAiStatus()">Refresh AI status</button>
         <div class="row wrap">
           <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('summarize')">Summarize</button>
           <button type="button" class="btn" [disabled]="!selectedLead" (click)="runAi('nba')">NBA</button>
