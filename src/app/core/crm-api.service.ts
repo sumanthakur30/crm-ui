@@ -82,6 +82,10 @@ export class CrmApiService {
     return this.http.post<Lead>(`${this.base}/leads`, body);
   }
 
+  updateLead(id: number, body: LeadUpsert): Observable<Lead> {
+    return this.http.put<Lead>(`${this.base}/leads/${id}`, body);
+  }
+
   moveStage(leadId: number, stageId: number): Observable<Lead> {
     return this.http.post<Lead>(`${this.base}/leads/${leadId}/stage/${stageId}`, {});
   }
@@ -206,6 +210,23 @@ export class CrmApiService {
   convertLead(id: number, targetSystem: string): Observable<Record<string, unknown>> {
     const params = new HttpParams().set('targetSystem', targetSystem);
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert`, {}, { params });
+  }
+
+  convertLeadToCrm(
+    id: number,
+    body: {
+      accountMode: 'CREATE' | 'EXISTING';
+      accountId?: number | null;
+      account?: Partial<CrmAccount> | null;
+      contactMode: 'CREATE' | 'EXISTING' | 'NONE';
+      contactId?: number | null;
+      contact?: Partial<CrmContact> | null;
+      createOpportunity: boolean;
+      opportunity?: { name?: string; amount?: number | null; currency?: string | null } | null;
+      markLeadConverted?: boolean;
+    }
+  ): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert-to-crm`, body);
   }
 
   ensureWelcomeSequence(): Observable<Sequence> {
@@ -378,8 +399,33 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${survivorId}/merge/${duplicateId}`, {});
   }
 
+  listDuplicateRules(objectType = 'LEAD'): Observable<Array<Record<string, unknown>>> {
+    const params = new HttpParams().set('objectType', objectType);
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/duplicate-rules`, { params });
+  }
+
+  upsertDuplicateRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/duplicate-rules`, body);
+  }
+
   listAccounts(): Observable<CrmAccount[]> {
     return this.http.get<CrmAccount[]>(`${this.base}/accounts`);
+  }
+
+  getAccount(id: number): Observable<CrmAccount> {
+    return this.http.get<CrmAccount>(`${this.base}/accounts/${id}`);
+  }
+
+  getAccountSummary(id: number): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/accounts/${id}/summary`);
+  }
+
+  accountTimeline(id: number): Observable<TimelineItem[]> {
+    return this.http.get<TimelineItem[]>(`${this.base}/accounts/${id}/timeline`);
+  }
+
+  addAccountNote(id: number, body: string): Observable<unknown> {
+    return this.http.post(`${this.base}/accounts/${id}/notes`, { body });
   }
 
   upsertAccount(body: Partial<CrmAccount> & { name: string }): Observable<CrmAccount> {

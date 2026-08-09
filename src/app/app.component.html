@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 5 pilot — RETAIL · entitlements · convert · auth</p>
+      <p class="tag">Phase 5 · Sprint 2 — party convert · account 360 · duplicate rules</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -17,6 +17,9 @@
     <button type="button" class="btn ghost" (click)="refreshStatus()">Ping</button>
   </div>
 </header>
+
+<!-- Route host for /:module deep links (UI stays in AppComponent) -->
+<router-outlet></router-outlet>
 
 <section class="panel compact" *ngIf="showLogin" style="margin: 0 1.25rem 0.75rem">
   <h2>Auth login</h2>
@@ -34,7 +37,7 @@
   </div>
 </section>
 
-<main class="layout" [class.drawer-open]="!!selectedLead || !!selectedOpp">
+<main class="layout" [class.drawer-open]="!!selectedLead || !!selectedOpp || (module === 'accounts' && !!selectedAccount)">
   <p class="flash ok" *ngIf="message">{{ message }}</p>
   <p class="flash err" *ngIf="error">{{ error }}</p>
 
@@ -49,51 +52,47 @@
         <button type="button" class="btn ghost" (click)="reloadAll()">Refresh</button>
       </div>
       <nav class="module-tabs">
-        <button type="button" class="btn" [class.primary]="module === 'leads'" (click)="setModule('leads')">Leads</button>
-        <button type="button" class="btn" [class.primary]="module === 'deals'" (click)="setModule('deals')">Deals</button>
-        <button
-          type="button"
+        <a routerLink="/leads" routerLinkActive="primary" class="btn" [class.primary]="module === 'leads'">Leads</a>
+        <a routerLink="/deals" routerLinkActive="primary" class="btn" [class.primary]="module === 'deals'">Deals</a>
+        <a
+          *ngIf="can('quotes')"
+          routerLink="/quotes"
+          routerLinkActive="primary"
           class="btn"
           [class.primary]="module === 'quotes'"
-          [disabled]="!can('quotes')"
-          [title]="can('quotes') ? '' : upgradeHint('Quotes')"
-          (click)="setModule('quotes')"
         >
           Quotes
-        </button>
-        <button type="button" class="btn" [class.primary]="module === 'insights'" (click)="setModule('insights')">Insights</button>
-        <button type="button" class="btn" [class.primary]="module === 'accounts'" (click)="setModule('accounts')">Accounts</button>
-        <button
-          type="button"
+        </a>
+        <a routerLink="/insights" routerLinkActive="primary" class="btn" [class.primary]="module === 'insights'">Insights</a>
+        <a routerLink="/accounts" routerLinkActive="primary" class="btn" [class.primary]="module === 'accounts'">Accounts</a>
+        <a
+          *ngIf="can('campaigns')"
+          routerLink="/campaigns"
+          routerLinkActive="primary"
           class="btn"
           [class.primary]="module === 'campaigns'"
-          [disabled]="!can('campaigns')"
-          [title]="can('campaigns') ? '' : upgradeHint('Campaigns')"
-          (click)="setModule('campaigns')"
         >
           Campaigns
-        </button>
-        <button type="button" class="btn" [class.primary]="module === 'ops'" (click)="setModule('ops')">Ops</button>
-        <button
-          type="button"
+        </a>
+        <a routerLink="/ops" routerLinkActive="primary" class="btn" [class.primary]="module === 'ops'">Ops</a>
+        <a
+          *ngIf="can('cases')"
+          routerLink="/cases"
+          routerLinkActive="primary"
           class="btn"
           [class.primary]="module === 'cases'"
-          [disabled]="!can('cases')"
-          [title]="can('cases') ? '' : upgradeHint('Cases')"
-          (click)="setModule('cases')"
         >
           Cases
-        </button>
-        <button
-          type="button"
+        </a>
+        <a
+          *ngIf="can('ai')"
+          routerLink="/enterprise"
+          routerLinkActive="primary"
           class="btn"
           [class.primary]="module === 'enterprise'"
-          [disabled]="!can('ai')"
-          [title]="can('ai') ? '' : upgradeHint('AI / Enterprise')"
-          (click)="setModule('enterprise')"
         >
           AI / Enterprise
-        </button>
+        </a>
       </nav>
     </div>
     <p class="hint" *ngIf="workspace as ws">
@@ -625,7 +624,7 @@
           </table>
         </div>
         <ng-template #pickAccount>
-          <p class="hint">Select an account to view hierarchy contacts.</p>
+          <p class="hint">Select an account to view hierarchy contacts and 360 summary.</p>
         </ng-template>
       </section>
     </div>
@@ -1012,6 +1011,22 @@
           <li *ngIf="!auditExports.length" class="muted">No exports yet.</li>
         </ul>
       </section>
+      <section class="panel">
+        <h2>Duplicate rules (leads)</h2>
+        <p class="hint">Match phone / email / GSTIN when finding duplicates. GSTIN defaults off.</p>
+        <button type="button" class="btn" (click)="loadDuplicateRules()">Refresh</button>
+        <ul class="member-list">
+          <li *ngFor="let r of duplicateRules">
+            <strong>{{ r['code'] }}</strong>
+            <span class="muted">{{ r['matchField'] }} · {{ r['normalizeMode'] }} · w{{ r['weight'] }}</span>
+            <span class="badge">{{ r['enabled'] ? 'ON' : 'OFF' }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="toggleDuplicateRule(r)">
+              {{ r['enabled'] ? 'Disable' : 'Enable' }}
+            </button>
+          </li>
+          <li *ngIf="!duplicateRules.length" class="muted">No rules loaded yet.</li>
+        </ul>
+      </section>
     </div>
     <div class="grid-2">
       <section class="panel">
@@ -1067,7 +1082,7 @@
     <button type="button" class="btn ghost" (click)="closeLead()">Close</button>
   </div>
 
-  <dl class="meta">
+  <dl class="meta" *ngIf="!editingLead">
     <div><dt>Contact</dt><dd>{{ lead.displayName || '—' }}</dd></div>
     <div><dt>Company</dt><dd>{{ lead.companyName || '—' }}</dd></div>
     <div><dt>Account</dt><dd>{{ accountName(lead.accountId) }}</dd></div>
@@ -1080,8 +1095,123 @@
   </dl>
 
   <section>
-    <h3>Convert to deal</h3>
-    <button type="button" class="btn primary" [disabled]="busy" (click)="createOpportunity(lead)">Create opportunity</button>
+    <div class="row between wrap">
+      <h3>Lead details</h3>
+      <button type="button" class="btn" *ngIf="!editingLead" (click)="startEditLead()">Edit</button>
+    </div>
+    <form class="form" *ngIf="editingLead" (ngSubmit)="saveLeadEdit()">
+      <label>Title * <input required [(ngModel)]="editLeadForm.title" name="editTitle" /></label>
+      <label>Contact name <input [(ngModel)]="editLeadForm.displayName" name="editDisplay" /></label>
+      <label>Company <input [(ngModel)]="editLeadForm.companyName" name="editCompany" /></label>
+      <label>Phone <input [(ngModel)]="editLeadForm.phone" name="editPhone" /></label>
+      <label>Email <input type="email" [(ngModel)]="editLeadForm.email" name="editEmail" /></label>
+      <label>Source <input [(ngModel)]="editLeadForm.sourceCode" name="editSource" /></label>
+      <label>
+        Priority
+        <select [(ngModel)]="editLeadForm.priority" name="editPriority">
+          <option value="LOW">LOW</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="HIGH">HIGH</option>
+          <option value="HOT">HOT</option>
+        </select>
+      </label>
+      <label>
+        Status
+        <select [(ngModel)]="editLeadForm.status" name="editStatus">
+          <option value="OPEN">OPEN</option>
+          <option value="QUALIFIED">QUALIFIED</option>
+          <option value="CONVERTED">CONVERTED</option>
+          <option value="LOST">LOST</option>
+          <option value="DUPLICATE">DUPLICATE</option>
+        </select>
+      </label>
+      <div class="row wrap">
+        <button type="submit" class="btn primary" [disabled]="busy">Save</button>
+        <button type="button" class="btn ghost" (click)="cancelEditLead()">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <h3>Convert to CRM party</h3>
+    <p class="hint">Create or link Account / Contact, optionally open an Opportunity. Separate from ERP convert below.</p>
+    <label>
+      Account
+      <select
+        [(ngModel)]="partyConvertForm.accountMode"
+        name="pcAcctMode"
+        (ngModelChange)="onPartyAccountModeChange()"
+      >
+        <option value="CREATE">Create new</option>
+        <option value="EXISTING">Existing</option>
+      </select>
+    </label>
+    <ng-container *ngIf="partyConvertForm.accountMode === 'CREATE'">
+      <input class="full" [(ngModel)]="partyConvertForm.accountName" name="pcAcctName" placeholder="Account name" />
+      <div class="row wrap">
+        <input [(ngModel)]="partyConvertForm.accountGstin" name="pcGstin" placeholder="GSTIN" />
+        <input [(ngModel)]="partyConvertForm.accountPhone" name="pcAcctPhone" placeholder="Phone" />
+        <input [(ngModel)]="partyConvertForm.accountEmail" name="pcAcctEmail" placeholder="Email" />
+      </div>
+    </ng-container>
+    <select
+      *ngIf="partyConvertForm.accountMode === 'EXISTING'"
+      class="full"
+      [(ngModel)]="partyConvertForm.accountId"
+      name="pcAcctId"
+      (ngModelChange)="onPartyAccountPicked()"
+    >
+      <option [ngValue]="null" disabled>Pick account</option>
+      <option *ngFor="let a of accounts" [ngValue]="a.id">{{ a.name }}</option>
+    </select>
+
+    <label>
+      Contact
+      <select [(ngModel)]="partyConvertForm.contactMode" name="pcCtMode">
+        <option value="CREATE">Create new</option>
+        <option value="EXISTING">Existing</option>
+        <option value="NONE">Skip</option>
+      </select>
+    </label>
+    <ng-container *ngIf="partyConvertForm.contactMode === 'CREATE'">
+      <input class="full" [(ngModel)]="partyConvertForm.contactName" name="pcCtName" placeholder="Contact name" />
+      <div class="row wrap">
+        <input [(ngModel)]="partyConvertForm.contactTitle" name="pcCtTitle" placeholder="Title" />
+        <input [(ngModel)]="partyConvertForm.contactPhone" name="pcCtPhone" placeholder="Phone" />
+        <input [(ngModel)]="partyConvertForm.contactEmail" name="pcCtEmail" placeholder="Email" />
+      </div>
+    </ng-container>
+    <select
+      *ngIf="partyConvertForm.contactMode === 'EXISTING'"
+      class="full"
+      [(ngModel)]="partyConvertForm.contactId"
+      name="pcCtId"
+    >
+      <option [ngValue]="null" disabled>Pick contact</option>
+      <option *ngFor="let c of leadContacts" [ngValue]="c.id">{{ c.displayName }}</option>
+    </select>
+
+    <label class="check">
+      <input type="checkbox" [(ngModel)]="partyConvertForm.createOpportunity" name="pcOpp" /> Create opportunity
+    </label>
+    <ng-container *ngIf="partyConvertForm.createOpportunity">
+      <input class="full" [(ngModel)]="partyConvertForm.oppName" name="pcOppName" placeholder="Opportunity name" />
+      <input type="number" [(ngModel)]="partyConvertForm.oppAmount" name="pcOppAmt" placeholder="Amount" />
+    </ng-container>
+    <label class="check">
+      <input type="checkbox" [(ngModel)]="partyConvertForm.markLeadConverted" name="pcMark" /> Mark lead CONVERTED
+    </label>
+    <div class="row wrap">
+      <button type="button" class="btn primary" [disabled]="busy" (click)="convertLeadToCrmParty()">
+        Convert to CRM
+      </button>
+      <button type="button" class="btn" [disabled]="busy" (click)="createOpportunity(lead)">Quick opportunity only</button>
+    </div>
+    <p class="hint" *ngIf="lastPartyConvert as pc">
+      Last: {{ pc['status'] }} · account {{ pc['accountId'] || '—' }}
+      <span *ngIf="pc['contactId']"> · contact {{ pc['contactId'] }}</span>
+      <span *ngIf="pc['opportunityId']"> · opp {{ pc['opportunityId'] }}</span>
+    </p>
   </section>
 
   <section>
@@ -1094,6 +1224,13 @@
       <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? '' : upgradeHint('AI')" (click)="runAi('summarize')">AI summary</button>
       <button type="button" class="btn" (click)="findDuplicates()">Find duplicates</button>
     </div>
+    <ul class="member-list" *ngIf="duplicateHits.length">
+      <li *ngFor="let d of duplicateHits">
+        <strong>#{{ d['id'] }}</strong>
+        <span class="muted">{{ d['title'] || d['displayName'] || '—' }} · {{ d['phone'] || d['email'] || '' }}</span>
+        <button type="button" class="btn" (click)="mergeDuplicateIntoSelected(+$any(d['id']))">Merge into this</button>
+      </li>
+    </ul>
     <div class="row wrap">
       <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />
       <input type="number" [(ngModel)]="callForm.durationSec" name="callDur" />
@@ -1286,6 +1423,94 @@
       <li *ngIf="!timeline.length" class="muted">No timeline yet.</li>
     </ul>
   </section>
+</aside>
+
+<!-- Account 360 drawer -->
+<aside class="drawer" *ngIf="module === 'accounts' && selectedAccount as acct">
+  <div class="drawer-head">
+    <div>
+      <h2>{{ acct.name }}</h2>
+      <p class="muted">#{{ acct.id }} · {{ acct.gstin || 'no GSTIN' }}</p>
+    </div>
+    <button type="button" class="btn ghost" (click)="closeAccount()">Close</button>
+  </div>
+
+  <div class="row wrap" style="margin-bottom: 0.75rem">
+    <button type="button" class="btn" [class.primary]="accountTab === 'overview'" (click)="accountTab = 'overview'">
+      Overview
+    </button>
+    <button type="button" class="btn" [class.primary]="accountTab === 'timeline'" (click)="accountTab = 'timeline'">
+      Timeline
+    </button>
+  </div>
+
+  <ng-container *ngIf="accountTab === 'overview'">
+    <dl class="meta">
+      <div><dt>Phone</dt><dd>{{ acct.phone || '—' }}</dd></div>
+      <div><dt>Email</dt><dd>{{ acct.email || '—' }}</dd></div>
+      <div><dt>State / PIN</dt><dd>{{ acct.stateCode || '—' }} {{ acct.pincode || '' }}</dd></div>
+      <div><dt>Contacts</dt><dd>{{ accountSummaryRows('contacts').length || contacts.length }}</dd></div>
+      <div><dt>Linked leads</dt><dd>{{ accountSummaryRows('leads').length }}</dd></div>
+      <div><dt>Opportunities</dt><dd>{{ accountSummaryRows('opportunities').length }}</dd></div>
+    </dl>
+
+    <section>
+      <h3>Linked leads</h3>
+      <ul class="member-list">
+        <li *ngFor="let L of accountSummaryRows('leads')">
+          <strong>#{{ L['id'] }}</strong>
+          <span class="muted">{{ L['title'] }} · {{ L['status'] }}</span>
+        </li>
+        <li *ngIf="!accountSummaryRows('leads').length" class="muted">No linked leads.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Opportunities</h3>
+      <ul class="member-list">
+        <li *ngFor="let o of accountSummaryRows('opportunities')">
+          <strong>#{{ o['id'] }}</strong>
+          <span class="muted">{{ o['name'] }} · {{ o['status'] }} · {{ o['amount'] ?? '—' }}</span>
+        </li>
+        <li *ngIf="!accountSummaryRows('opportunities').length" class="muted">No opportunities.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Contacts</h3>
+      <ul class="member-list">
+        <li *ngFor="let c of contacts">
+          <strong>{{ c.displayName }}</strong>
+          <span class="muted">{{ c.title || '—' }} · {{ c.phone || c.email || '' }}</span>
+        </li>
+        <li *ngIf="!contacts.length" class="muted">No contacts.</li>
+      </ul>
+    </section>
+  </ng-container>
+
+  <ng-container *ngIf="accountTab === 'timeline'">
+    <section>
+      <h3>Add note</h3>
+      <textarea [(ngModel)]="accountNoteDraft" name="acctNote" rows="3" placeholder="Account note…"></textarea>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="busy || !accountNoteDraft.trim()"
+        (click)="addAccountNote()"
+      >
+        Save note
+      </button>
+    </section>
+    <section>
+      <h3>Timeline</h3>
+      <ul class="timeline">
+        <li *ngFor="let item of accountTimeline">
+          <span class="when">{{ item.occurredAt | date: 'short' }}</span>
+          <strong>{{ item.eventType }}</strong>
+          <p>{{ item.summary }}</p>
+        </li>
+        <li *ngIf="!accountTimeline.length" class="muted">No account timeline yet.</li>
+      </ul>
+    </section>
+  </ng-container>
 </aside>
 
 <!-- Opportunity drawer -->

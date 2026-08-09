@@ -158,6 +158,9 @@ export interface EntitlementsSnapshot {
   features: Record<string, boolean>;
   modules: {
     leads?: boolean;
+    deals?: boolean;
+    accounts?: boolean;
+    insights?: boolean;
     quotes?: boolean;
     campaigns?: boolean;
     ai?: boolean;

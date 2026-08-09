@@ -1,7 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { CrmApiService } from './core/crm-api.service';
 import { TenantService } from './core/tenant.service';
 import { AuthSessionService } from './core/auth-session.service';
+import { CrmModuleId, CrmNavService } from './core/crm-nav.service';
 import {
   Campaign,
   CloseReason,
@@ -40,18 +43,10 @@ export interface DealKanbanColumn {
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = 'SugamFlow CRM';
-  module:
-    | 'leads'
-    | 'deals'
-    | 'quotes'
-    | 'insights'
-    | 'campaigns'
-    | 'accounts'
-    | 'ops'
-    | 'cases'
-    | 'enterprise' = 'leads';
+  module: CrmModuleId = 'leads';
+  private navSub: Subscription | null = null;
   view: 'list' | 'kanban' = 'kanban';
   /** Cached for template — getters that allocate each CD cycle freeze Chrome ("Page Unresponsive"). */
   kanbanColumns: LeadKanbanColumn[] = [];
@@ -126,6 +121,19 @@ export class AppComponent implements OnInit {
     utmCampaign: '',
   };
 
+  /** Edit form bound in lead drawer (PUT /leads/{id}). */
+  editLeadForm = {
+    title: '',
+    displayName: '',
+    companyName: '',
+    email: '',
+    phone: '',
+    sourceCode: '',
+    priority: 'MEDIUM',
+    status: 'OPEN',
+  };
+  editingLead = false;
+
   accountForm = {
     name: '',
     gstin: '',
@@ -141,6 +149,35 @@ export class AppComponent implements OnInit {
     phone: '',
     title: '',
   };
+
+  /** Sprint 2 — account 360 drawer */
+  accountTab: 'overview' | 'timeline' = 'overview';
+  accountSummary: Record<string, unknown> | null = null;
+  accountTimeline: TimelineItem[] = [];
+  accountNoteDraft = '';
+
+  /** Sprint 2 — lead → CRM party convert wizard */
+  partyConvertForm = {
+    accountMode: 'CREATE' as 'CREATE' | 'EXISTING',
+    accountId: null as number | null,
+    accountName: '',
+    accountGstin: '',
+    accountPhone: '',
+    accountEmail: '',
+    contactMode: 'CREATE' as 'CREATE' | 'EXISTING' | 'NONE',
+    contactId: null as number | null,
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    contactTitle: '',
+    createOpportunity: true,
+    oppName: '',
+    oppAmount: null as number | null,
+    markLeadConverted: true,
+  };
+  lastPartyConvert: Record<string, unknown> | null = null;
+  duplicateHits: Array<Record<string, unknown>> = [];
+  duplicateRules: Array<Record<string, unknown>> = [];
 
   campaignForm = {
     code: '',
@@ -308,7 +345,9 @@ export class AppComponent implements OnInit {
   constructor(
     private readonly api: CrmApiService,
     readonly tenant: TenantService,
-    readonly auth: AuthSessionService
+    readonly auth: AuthSessionService,
+    private readonly router: Router,
+    private readonly nav: CrmNavService
   ) {
     this.tenantDraft = tenant.tenantId;
     this.shopDraft = tenant.shopId;
@@ -318,6 +357,13 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.navSub = this.nav.module$.subscribe((m) => {
+      if (this.module !== m) {
+        this.applyModule(m, false);
+      } else {
+        this.module = m;
+      }
+    });
     this.refreshStatus();
     this.loadEntitlements();
     this.loadTemplates();
@@ -329,6 +375,10 @@ export class AppComponent implements OnInit {
       e.preventDefault();
       this.installPromptEvent = e;
     });
+  }
+
+  ngOnDestroy(): void {
+    this.navSub?.unsubscribe();
   }
 
   promptInstall(): void {
@@ -413,18 +463,7 @@ export class AppComponent implements OnInit {
     return opp.id;
   }
 
-  setModule(
-    m:
-      | 'leads'
-      | 'deals'
-      | 'quotes'
-      | 'insights'
-      | 'campaigns'
-      | 'accounts'
-      | 'ops'
-      | 'cases'
-      | 'enterprise'
-  ): void {
+  setModule(m: CrmModuleId): void {
     const gateKey =
       m === 'quotes'
         ? 'quotes'
@@ -441,8 +480,36 @@ export class AppComponent implements OnInit {
       this.error = this.upgradeHint(m);
       return;
     }
+    void this.router.navigate(['/', m]);
+    this.applyModule(m, true);
+  }
+
+  private applyModule(m: CrmModuleId, fromClick: boolean): void {
+    const gateKey =
+      m === 'quotes'
+        ? 'quotes'
+        : m === 'campaigns'
+          ? 'campaigns'
+          : m === 'enterprise'
+            ? 'ai'
+            : m === 'ops'
+              ? 'ops'
+              : m === 'cases'
+                ? 'cases'
+                : null;
+    if (gateKey && !this.can(gateKey)) {
+      if (!fromClick) {
+        void this.router.navigate(['/leads']);
+      }
+      this.error = this.upgradeHint(m);
+      return;
+    }
     this.module = m;
+    this.nav.setModule(m);
     this.error = '';
+    if (m !== 'accounts') {
+      this.closeAccount();
+    }
     if (m !== 'enterprise') {
       this.selectedLead = null;
       this.selectedOpp = null;
@@ -454,19 +521,22 @@ export class AppComponent implements OnInit {
       this.loadOpportunities();
     } else if (m === 'insights') {
       this.loadInsights();
-    } else if (m === 'campaigns') {
-      this.loadCampaigns();
     } else if (m === 'accounts') {
       this.loadAccounts();
+    } else if (m === 'campaigns') {
+      this.loadCampaigns();
     } else if (m === 'ops') {
       this.loadOps();
     } else if (m === 'cases') {
       this.loadCases();
     } else if (m === 'enterprise') {
       this.loadEnterprise();
+      this.loadDuplicateRules();
       if (this.selectedLead) {
         this.loadLeadInsights();
       }
+    } else if (m === 'leads') {
+      this.loadLeads();
     }
   }
 
@@ -794,7 +864,60 @@ export class AppComponent implements OnInit {
 
   selectAccount(account: CrmAccount): void {
     this.selectedAccount = account;
+    this.accountTab = 'overview';
+    this.accountNoteDraft = '';
     this.loadContactsForAccount(account.id);
+    this.loadAccountDetail(account.id);
+  }
+
+  closeAccount(): void {
+    this.selectedAccount = null;
+    this.accountSummary = null;
+    this.accountTimeline = [];
+    this.accountNoteDraft = '';
+    this.contacts = [];
+  }
+
+  loadAccountDetail(accountId: number): void {
+    this.api.getAccountSummary(accountId).subscribe({
+      next: (s) => (this.accountSummary = s || null),
+      error: (err) => {
+        this.accountSummary = null;
+        this.setError(err, 'Failed to load account summary');
+      },
+    });
+    this.loadAccountTimeline(accountId);
+  }
+
+  loadAccountTimeline(accountId: number): void {
+    this.api.accountTimeline(accountId).subscribe({
+      next: (items) => (this.accountTimeline = items || []),
+      error: () => (this.accountTimeline = []),
+    });
+  }
+
+  addAccountNote(): void {
+    if (!this.selectedAccount || !this.accountNoteDraft.trim()) {
+      return;
+    }
+    this.busy = true;
+    this.api.addAccountNote(this.selectedAccount.id, this.accountNoteDraft.trim()).subscribe({
+      next: () => {
+        this.busy = false;
+        this.accountNoteDraft = '';
+        this.message = 'Account note added';
+        this.loadAccountTimeline(this.selectedAccount!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Failed to add account note');
+      },
+    });
+  }
+
+  accountSummaryRows(key: 'leads' | 'opportunities' | 'contacts'): Array<Record<string, unknown>> {
+    const rows = this.accountSummary?.[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
   }
 
   loadContactsForAccount(accountId: number): void {
@@ -803,6 +926,173 @@ export class AppComponent implements OnInit {
       error: (err) => {
         this.contacts = [];
         this.setError(err, 'Failed to load contacts');
+      },
+    });
+  }
+
+  onPartyAccountModeChange(): void {
+    if (this.partyConvertForm.accountMode === 'EXISTING' && !this.accounts.length) {
+      this.loadAccounts();
+    }
+  }
+
+  onPartyAccountPicked(): void {
+    const id = this.partyConvertForm.accountId;
+    if (id == null) {
+      return;
+    }
+    this.api.listContacts(id).subscribe({
+      next: (list) => (this.leadContacts = list || []),
+      error: () => (this.leadContacts = []),
+    });
+  }
+
+  resetPartyConvertForm(lead?: Lead | null): void {
+    const src = lead || this.selectedLead;
+    this.partyConvertForm = {
+      accountMode: src?.accountId ? 'EXISTING' : 'CREATE',
+      accountId: src?.accountId ?? null,
+      accountName: src?.companyName || src?.displayName || '',
+      accountGstin: '',
+      accountPhone: src?.phone || '',
+      accountEmail: src?.email || '',
+      contactMode: src?.contactId ? 'EXISTING' : 'CREATE',
+      contactId: src?.contactId ?? null,
+      contactName: src?.displayName || '',
+      contactEmail: src?.email || '',
+      contactPhone: src?.phone || '',
+      contactTitle: '',
+      createOpportunity: true,
+      oppName: src?.title ? `Deal · ${src.title}` : '',
+      oppAmount: null,
+      markLeadConverted: true,
+    };
+    this.lastPartyConvert = null;
+    if (this.partyConvertForm.accountId) {
+      this.onPartyAccountPicked();
+    }
+  }
+
+  convertLeadToCrmParty(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const f = this.partyConvertForm;
+    if (f.accountMode === 'EXISTING' && f.accountId == null) {
+      this.error = 'Pick an existing account';
+      return;
+    }
+    if (f.contactMode === 'EXISTING' && f.contactId == null) {
+      this.error = 'Pick an existing contact';
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .convertLeadToCrm(this.selectedLead.id, {
+        accountMode: f.accountMode,
+        accountId: f.accountMode === 'EXISTING' ? f.accountId : null,
+        account:
+          f.accountMode === 'CREATE'
+            ? {
+                name: f.accountName || undefined,
+                gstin: f.accountGstin || undefined,
+                phone: f.accountPhone || undefined,
+                email: f.accountEmail || undefined,
+              }
+            : null,
+        contactMode: f.contactMode,
+        contactId: f.contactMode === 'EXISTING' ? f.contactId : null,
+        contact:
+          f.contactMode === 'CREATE'
+            ? {
+                displayName: f.contactName || undefined,
+                email: f.contactEmail || undefined,
+                phone: f.contactPhone || undefined,
+                title: f.contactTitle || undefined,
+              }
+            : null,
+        createOpportunity: f.createOpportunity,
+        opportunity: f.createOpportunity
+          ? { name: f.oppName || undefined, amount: f.oppAmount, currency: 'INR' }
+          : null,
+        markLeadConverted: f.markLeadConverted,
+      })
+      .subscribe({
+        next: (res) => {
+          this.busy = false;
+          this.lastPartyConvert = res;
+          const acct = res['accountId'] != null ? `#${res['accountId']}` : '—';
+          const opp = res['opportunityId'] != null ? ` · opp #${res['opportunityId']}` : '';
+          this.message = `CRM convert ${res['status'] || 'OK'} · account ${acct}${opp}`;
+          this.loadLeads();
+          this.loadAccounts();
+          if (this.selectedLead) {
+            this.loadTimeline(this.selectedLead.id);
+          }
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'CRM party convert failed');
+        },
+      });
+  }
+
+  loadDuplicateRules(): void {
+    this.api.listDuplicateRules('LEAD').subscribe({
+      next: (rows) => (this.duplicateRules = rows || []),
+      error: () => (this.duplicateRules = []),
+    });
+  }
+
+  toggleDuplicateRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertDuplicateRule({
+        id,
+        code: rule['code'],
+        objectType: rule['objectType'] || 'LEAD',
+        matchField: rule['matchField'],
+        normalizeMode: rule['normalizeMode'],
+        enabled: !rule['enabled'],
+        weight: rule['weight'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Duplicate rule ${rule['code']} ${rule['enabled'] ? 'disabled' : 'enabled'}`;
+          this.loadDuplicateRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update duplicate rule failed');
+        },
+      });
+  }
+
+  mergeDuplicateIntoSelected(dupId: number): void {
+    if (!this.selectedLead || !dupId) {
+      return;
+    }
+    if (!confirm(`Merge duplicate #${dupId} into #${this.selectedLead.id}?`)) {
+      return;
+    }
+    this.busy = true;
+    this.api.mergeLeads(this.selectedLead.id, dupId).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Merged #${dupId} into #${this.selectedLead!.id}`;
+        this.duplicateHits = [];
+        this.loadLeads();
+        this.loadTimeline(this.selectedLead!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Merge failed');
       },
     });
   }
@@ -972,18 +1262,95 @@ export class AppComponent implements OnInit {
     this.selectedOpp = null;
     this.selectedQuote = null;
     this.noteDraft = '';
+    this.editingLead = false;
+    this.duplicateHits = [];
+    this.syncEditLeadForm(lead);
+    this.resetPartyConvertForm(lead);
     this.loadTimeline(lead.id);
     this.loadLeadInsights();
     this.loadLeadHygiene(lead.id);
     this.loadOfflineNote(lead.id);
     this.refreshFfVisitUrl(lead);
+    if (!this.accounts.length) {
+      this.loadAccounts();
+    }
     if (this.can('sequences')) {
       this.loadSequences();
     }
   }
 
+  private syncEditLeadForm(lead: Lead): void {
+    this.editLeadForm = {
+      title: lead.title || '',
+      displayName: lead.displayName || '',
+      companyName: lead.companyName || '',
+      email: lead.email || '',
+      phone: lead.phone || '',
+      sourceCode: lead.sourceCode || '',
+      priority: lead.priority || 'MEDIUM',
+      status: lead.status || 'OPEN',
+    };
+  }
+
+  startEditLead(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.syncEditLeadForm(this.selectedLead);
+    this.editingLead = true;
+  }
+
+  cancelEditLead(): void {
+    this.editingLead = false;
+    if (this.selectedLead) {
+      this.syncEditLeadForm(this.selectedLead);
+    }
+  }
+
+  saveLeadEdit(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    if (!this.editLeadForm.title.trim()) {
+      this.error = 'Title is required';
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .updateLead(this.selectedLead.id, {
+        title: this.editLeadForm.title.trim(),
+        displayName: this.editLeadForm.displayName || null,
+        companyName: this.editLeadForm.companyName || null,
+        email: this.editLeadForm.email || null,
+        phone: this.editLeadForm.phone || null,
+        sourceCode: this.editLeadForm.sourceCode || null,
+        priority: this.editLeadForm.priority || null,
+        status: this.editLeadForm.status || null,
+        accountId: this.selectedLead.accountId ?? null,
+        contactId: this.selectedLead.contactId ?? null,
+        campaignId: this.selectedLead.campaignId ?? null,
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.selectedLead = lead;
+          this.editingLead = false;
+          this.syncEditLeadForm(lead);
+          this.message = `Lead #${lead.id} updated`;
+          this.loadLeads();
+          this.loadTimeline(lead.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update lead failed');
+        },
+      });
+  }
+
   closeLead(): void {
     this.selectedLead = null;
+    this.editingLead = false;
     this.timeline = [];
     this.leadTags = [];
     this.leadAttachments = [];
@@ -1786,24 +2153,12 @@ export class AppComponent implements OnInit {
     }
     this.api.findDuplicates(this.selectedLead.id).subscribe({
       next: (rows) => {
-        if (!rows?.length) {
-          this.message = 'No duplicates by phone/email';
+        this.duplicateHits = rows || [];
+        if (!this.duplicateHits.length) {
+          this.message = 'No duplicates for enabled rules (phone/email/GSTIN)';
           return;
         }
-        const first = rows[0];
-        const dupId = Number(first['id']);
-        if (!dupId || !confirm(`Merge duplicate #${dupId} into #${this.selectedLead!.id}?`)) {
-          this.message = `Found ${rows.length} duplicate(s)`;
-          return;
-        }
-        this.api.mergeLeads(this.selectedLead!.id, dupId).subscribe({
-          next: () => {
-            this.message = `Merged #${dupId} into #${this.selectedLead!.id}`;
-            this.loadLeads();
-            this.loadTimeline(this.selectedLead!.id);
-          },
-          error: (err) => this.setError(err, 'Merge failed'),
-        });
+        this.message = `Found ${this.duplicateHits.length} duplicate(s) — pick one to merge`;
       },
       error: (err) => this.setError(err, 'Duplicate search failed'),
     });

@@ -172,6 +172,19 @@ input:focus {
   color: #f7fbff;
 }
 
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.module-tabs a.btn.primary,
+a.btn.router-link-active {
+  background: #1f4b6e;
+  border-color: #1f4b6e;
+  color: #f7fbff;
+}
+
 .btn.primary:hover:not(:disabled) {
   background: #173a55;
 }
