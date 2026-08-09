@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 5 · Sprint 2 — party convert · account 360 · duplicate rules</p>
+      <p class="tag">Phase 5 · Sprint 3 — Customer 360 ERP · quote→order</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -347,9 +347,10 @@
             <label>Qty <input type="number" [(ngModel)]="quoteForm.qty" name="qQty" /></label>
             <label>Unit ₹ <input type="number" [(ngModel)]="quoteForm.unitPrice" name="qPrice" /></label>
             <label>GST % <input type="number" [(ngModel)]="quoteForm.gstRate" name="qGst" /></label>
+            <label>Product id <input type="number" [(ngModel)]="quoteForm.productId" name="qProd" placeholder="Retail catalog" /></label>
           </div>
           <label>Terms <textarea [(ngModel)]="quoteForm.terms" name="qTerms" rows="2"></textarea></label>
-          <p class="hint">Same seller/buyer state → CGST+SGST; different → IGST.</p>
+          <p class="hint">Same seller/buyer state → CGST+SGST; different → IGST. Product id maps Accept → ERP order line.</p>
           <button type="submit" class="btn primary" [disabled]="busy">Create quote</button>
         </form>
       </section>
@@ -391,11 +392,25 @@
             <button type="button" class="btn" [disabled]="busy" (click)="createPaymentLink(q)">Payment link</button>
             <button type="button" class="btn" [disabled]="busy" (click)="markPaid(q)">Mark paid</button>
             <button type="button" class="btn" (click)="openPdf(q)">PDF</button>
-            <button type="button" class="btn primary" [disabled]="busy || q.status === 'SUPERSEDED'" (click)="acceptQuote(q)">Accept</button>
+            <button
+              type="button"
+              class="btn primary"
+              [disabled]="busy || q.status === 'SUPERSEDED'"
+              [title]="orderEnabled ? (orderProductMapped ? '' : 'Needs product mapping or line productId') : 'crm.order.enabled=false — Accept still marks quote ACCEPTED'"
+              (click)="acceptQuote(q)"
+            >
+              Accept → order
+            </button>
           </div>
+          <p class="hint" *ngIf="!orderEnabled">Order create off — Accept stores CRM status only (set CRM_ORDER_ENABLED=true).</p>
+          <p class="hint" *ngIf="orderEnabled && !orderProductMapped">Configure default-product-id or set line Product id before ERP create.</p>
           <p class="hint" *ngIf="q.approvalStatus === 'PENDING'">Discount approval #{{ q.approvalId }} pending — approve under Ops, then send.</p>
           <p class="hint" *ngIf="q.paymentLinkUrl">Pay: {{ q.paymentLinkUrl }} · {{ q.paymentStatus }}</p>
           <p class="hint" *ngIf="q.sharePayload?.['orderId'] as oid">ERP order #{{ oid }} (from Accept)</p>
+          <p class="hint" *ngIf="!q.sharePayload?.['orderId'] && q.sharePayload?.['orderCreate'] as oc">
+            Last order attempt: {{ $any(oc)['status'] }}
+            <span *ngIf="$any(oc)['note']"> · {{ $any(oc)['note'] }}</span>
+          </p>
           <p class="hint">Header discount above threshold (default 10%) blocks send until approved. Revise creates vN+1 DRAFT.</p>
           <h3>Share text</h3>
           <pre class="share">{{ shareText(q) }}</pre>
@@ -1439,6 +1454,9 @@
     <button type="button" class="btn" [class.primary]="accountTab === 'overview'" (click)="accountTab = 'overview'">
       Overview
     </button>
+    <button type="button" class="btn" [class.primary]="accountTab === 'erp'" (click)="accountTab = 'erp'">
+      ERP
+    </button>
     <button type="button" class="btn" [class.primary]="accountTab === 'timeline'" (click)="accountTab = 'timeline'">
       Timeline
     </button>
@@ -1482,6 +1500,48 @@
           <span class="muted">{{ c.title || '—' }} · {{ c.phone || c.email || '' }}</span>
         </li>
         <li *ngIf="!contacts.length" class="muted">No contacts.</li>
+      </ul>
+    </section>
+  </ng-container>
+
+  <ng-container *ngIf="accountTab === 'erp'">
+    <p class="hint" *ngIf="accountErp() as erp">
+      Federation {{ erp['status'] }} · shop customer {{ erp['shopCustomerId'] || '—' }} · live {{ erp['liveStatus'] }}
+    </p>
+    <section>
+      <h3>Orders</h3>
+      <ul class="member-list">
+        <li *ngFor="let o of accountErpRows('orders')">
+          <strong>#{{ o['orderId'] || o['id'] || '—' }}</strong>
+          <span class="muted">
+            {{ o['orderNumber'] || o['quoteNumber'] || '' }} · {{ o['status'] || o['paymentStatus'] || '' }} ·
+            {{ o['amount'] || o['totalAmount'] || '—' }} · {{ o['source'] }}
+          </span>
+        </li>
+        <li *ngIf="!accountErpRows('orders').length" class="muted">
+          No ERP/CRM-linked orders yet — Accept a quote or convert lead to SHOP_CUSTOMER.
+        </li>
+      </ul>
+    </section>
+    <section>
+      <h3>Invoices (quote projection)</h3>
+      <ul class="member-list">
+        <li *ngFor="let inv of accountErpRows('invoices')">
+          <strong>{{ inv['quoteNumber'] }}</strong>
+          <span class="muted">{{ inv['status'] }} · ₹{{ inv['amount'] }} · {{ inv['note'] }}</span>
+        </li>
+        <li *ngIf="!accountErpRows('invoices').length" class="muted">No accepted/sent quotes yet.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Payments</h3>
+      <ul class="member-list">
+        <li *ngFor="let p of accountErpRows('payments')">
+          <strong>{{ p['quoteNumber'] }}</strong>
+          <span class="badge">{{ p['paymentStatus'] }}</span>
+          <span class="muted">{{ p['paymentProvider'] }} · {{ p['paymentRef'] || '—' }}</span>
+        </li>
+        <li *ngIf="!accountErpRows('payments').length" class="muted">No payment links / paid quotes yet.</li>
       </ul>
     </section>
   </ng-container>

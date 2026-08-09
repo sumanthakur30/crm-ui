@@ -150,6 +150,8 @@ export interface StatusResponse {
   convertEnabled?: boolean;
   ctiEnabled?: boolean;
   inboundSigningEnabled?: boolean;
+  orderEnabled?: boolean;
+  orderProductMapped?: boolean;
 }
 
 /** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */
@@ -289,6 +291,7 @@ export interface QuoteLine {
   unitPrice: number;
   gstRate: number;
   discount?: number | null;
+  productId?: number | null;
 }
 
 export interface QuotationUpsert {

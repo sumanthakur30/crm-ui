@@ -151,10 +151,12 @@ export class AppComponent implements OnInit, OnDestroy {
   };
 
   /** Sprint 2 — account 360 drawer */
-  accountTab: 'overview' | 'timeline' = 'overview';
+  accountTab: 'overview' | 'timeline' | 'erp' = 'overview';
   accountSummary: Record<string, unknown> | null = null;
   accountTimeline: TimelineItem[] = [];
   accountNoteDraft = '';
+  orderEnabled = false;
+  orderProductMapped = false;
 
   /** Sprint 2 — lead → CRM party convert wizard */
   partyConvertForm = {
@@ -218,6 +220,7 @@ export class AppComponent implements OnInit, OnDestroy {
     qty: 1,
     unitPrice: 10000,
     gstRate: 18,
+    productId: null as number | null,
   };
 
   sendForm = {
@@ -613,9 +616,12 @@ export class AppComponent implements OnInit, OnDestroy {
         this.convertEnabled = !!s.convertEnabled;
         this.ctiEnabled = !!s.ctiEnabled;
         this.inboundSigningEnabled = !!s.inboundSigningEnabled;
+        this.orderEnabled = !!s.orderEnabled;
+        this.orderProductMapped = !!s.orderProductMapped;
         this.message =
           `${s.service} phase ${s.phase}` +
           (s.convertEnabled ? ' · convert on' : ' · convert off') +
+          (s.orderEnabled ? ' · order on' : ' · order off') +
           (s.ctiEnabled ? ' · CTI on' : ' · CTI off') +
           (s.inboundSigningEnabled ? ' · inbound signing on' : ' · inbound signing off');
         this.error = '';
@@ -917,6 +923,17 @@ export class AppComponent implements OnInit, OnDestroy {
 
   accountSummaryRows(key: 'leads' | 'opportunities' | 'contacts'): Array<Record<string, unknown>> {
     const rows = this.accountSummary?.[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
+
+  accountErp(): Record<string, unknown> | null {
+    const erp = this.accountSummary?.['erp'];
+    return erp && typeof erp === 'object' ? (erp as Record<string, unknown>) : null;
+  }
+
+  accountErpRows(key: 'orders' | 'invoices' | 'payments'): Array<Record<string, unknown>> {
+    const erp = this.accountErp();
+    const rows = erp?.[key];
     return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
   }
 
@@ -1234,6 +1251,7 @@ export class AppComponent implements OnInit, OnDestroy {
             qty: Number(this.quoteForm.qty) || 1,
             unitPrice: Number(this.quoteForm.unitPrice) || 0,
             gstRate: Number(this.quoteForm.gstRate) || 0,
+            productId: this.quoteForm.productId != null ? Number(this.quoteForm.productId) : null,
           },
         ],
       })
