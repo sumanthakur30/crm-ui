@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 5 · Sprint 4 — My Day · unified activities</p>
+      <p class="hint">Phase 5 · Sprint 5–6 — pipeline analytics · automation · sequences</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -616,6 +616,47 @@
         </ul>
       </section>
     </div>
+    <div class="grid-3" *ngIf="pipelineAnalytics">
+      <section class="panel">
+        <h2>Deal aging</h2>
+        <ul class="member-list">
+          <li *ngFor="let b of pipelineRows('agingBuckets')">
+            <strong>{{ b['label'] }}</strong>
+            <span class="muted">{{ b['count'] }} · ₹{{ b['amount'] }}</span>
+          </li>
+        </ul>
+        <p class="hint">Avg days to won {{ pipelineAnalytics['avgDaysToWon'] }} · lost {{ pipelineAnalytics['avgDaysToLost'] }}</p>
+      </section>
+      <section class="panel">
+        <h2>Velocity by stage</h2>
+        <ul class="member-list">
+          <li *ngFor="let v of pipelineRows('velocityByStage')">
+            <strong>{{ v['stageName'] }}</strong>
+            <span class="muted">{{ v['openCount'] }} open · avg {{ v['avgDaysInStage'] }}d</span>
+          </li>
+          <li *ngIf="!pipelineRows('velocityByStage').length" class="muted">No open deals.</li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Won / lost reasons</h2>
+        <h3>Won</h3>
+        <ul class="member-list">
+          <li *ngFor="let r of pipelineRows('wonByReason')">
+            <strong>{{ r['reasonCode'] }}</strong>
+            <span class="muted">{{ r['count'] }} · ₹{{ r['amount'] }}</span>
+          </li>
+          <li *ngIf="!pipelineRows('wonByReason').length" class="muted">No wins yet.</li>
+        </ul>
+        <h3>Lost</h3>
+        <ul class="member-list">
+          <li *ngFor="let r of pipelineRows('lostByReason')">
+            <strong>{{ r['reasonCode'] }}</strong>
+            <span class="muted">{{ r['count'] }} · ₹{{ r['amount'] }}</span>
+          </li>
+          <li *ngIf="!pipelineRows('lostByReason').length" class="muted">No losses yet.</li>
+        </ul>
+      </section>
+    </div>
     <section class="panel">
       <h2>Open SLA tasks</h2>
       <ul class="member-list">
@@ -908,7 +949,9 @@
         <p class="hint" *ngIf="forecast as f">
           Open {{ f['openCount'] }} · Pipeline ₹{{ f['pipelineAmount'] }} · Weighted ₹{{ f['weightedForecast'] }}
           · Commits ₹{{ f['commitTotal'] || 0 }}
+          · Gap ₹{{ f['gapCommitVsWeighted'] || 0 }}
         </p>
+        <p class="hint" *ngIf="forecast?.['managerHint']">{{ forecast!['managerHint'] }}</p>
         <p class="hint" *ngIf="forecast?.['collaborative'] as c">
           Collaborative: weighted {{ $any(c)['pipelineWeighted'] }} + commits {{ $any(c)['commitTotal'] }} =
           {{ $any(c)['combined'] }}
@@ -957,7 +1000,7 @@
       <h2>Stage automation</h2>
       <p class="hint" *ngIf="!can('automation')">{{ upgradeHint('Automation') }}</p>
       <ng-container *ngIf="can('automation'); else noAutomationPlan">
-        <p class="hint">On stage move: CREATE_TASK or TIMELINE_NOTE. Optional School rule-engine when crm.rule-engine.enabled=true.</p>
+        <p class="hint">On stage move: CREATE_TASK, TIMELINE_NOTE, or ENROLL_SEQUENCE. Optional School rule-engine when enabled.</p>
         <div class="row wrap">
           <select [(ngModel)]="stageRuleForm.objectType" name="autoObj">
             <option value="LEAD">Lead</option>
@@ -967,15 +1010,33 @@
           <select [(ngModel)]="stageRuleForm.actionType" name="autoAct">
             <option value="CREATE_TASK">Create task</option>
             <option value="TIMELINE_NOTE">Timeline note</option>
+            <option value="ENROLL_SEQUENCE">Enroll sequence</option>
           </select>
-          <input [(ngModel)]="stageRuleForm.title" name="autoTitle" placeholder="Task title / note" />
+          <input
+            *ngIf="stageRuleForm.actionType !== 'ENROLL_SEQUENCE'"
+            [(ngModel)]="stageRuleForm.title"
+            name="autoTitle"
+            placeholder="Task title / note"
+          />
+          <select
+            *ngIf="stageRuleForm.actionType === 'ENROLL_SEQUENCE'"
+            [(ngModel)]="stageRuleForm.sequenceId"
+            name="autoSeq"
+          >
+            <option [ngValue]="null" disabled>Pick sequence</option>
+            <option *ngFor="let s of sequences" [ngValue]="s.id">{{ s.code }} · {{ s.name }}</option>
+          </select>
           <button type="button" class="btn primary" [disabled]="busy" (click)="createStageRule()">Add rule</button>
         </div>
         <ul class="member-list">
           <li *ngFor="let r of stageAutomationRules">
             <strong>{{ r['objectType'] }} → {{ r['toStageCode'] || r['toStageId'] }}</strong>
             <span class="badge">{{ r['actionType'] }}</span>
+            <span class="badge">{{ r['active'] ? 'ON' : 'OFF' }}</span>
             <span class="muted">{{ r['actionConfig'] | json }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="toggleStageRule(r)">
+              {{ r['active'] ? 'Disable' : 'Enable' }}
+            </button>
           </li>
           <li *ngIf="!stageAutomationRules.length" class="muted">Loading defaults on first open…</li>
         </ul>
@@ -983,6 +1044,30 @@
       <ng-template #noAutomationPlan>
         <p class="muted">Stage automation requires crm-professional or higher (FEATURE_CRM_AUTOMATION).</p>
       </ng-template>
+    </section>
+
+    <section class="panel" *ngIf="can('sequences')">
+      <h2>Sequence enrollments</h2>
+      <button type="button" class="btn" (click)="loadSequenceEnrollments()">Refresh</button>
+      <ul class="member-list">
+        <li *ngFor="let e of sequenceEnrollments">
+          <strong>#{{ e['id'] }}</strong>
+          <span class="badge">{{ e['status'] }}</span>
+          <span class="muted">seq {{ e['sequenceId'] }} · {{ e['channel'] }} · {{ e['recipient'] }} · step {{ e['currentStep'] }}</span>
+          <button type="button" class="btn" *ngIf="e['status'] === 'ACTIVE'" (click)="actOnEnrollment(+$any(e['id']), 'pause')">Pause</button>
+          <button type="button" class="btn" *ngIf="e['status'] === 'PAUSED'" (click)="actOnEnrollment(+$any(e['id']), 'resume')">Resume</button>
+          <button type="button" class="btn" *ngIf="e['status'] === 'FAILED'" (click)="actOnEnrollment(+$any(e['id']), 'retry')">Retry</button>
+          <button
+            type="button"
+            class="btn ghost"
+            *ngIf="e['status'] === 'ACTIVE' || e['status'] === 'PAUSED' || e['status'] === 'FAILED'"
+            (click)="actOnEnrollment(+$any(e['id']), 'cancel')"
+          >
+            Cancel
+          </button>
+        </li>
+        <li *ngIf="!sequenceEnrollments.length" class="muted">No enrollments yet — enroll from a lead drawer.</li>
+      </ul>
     </section>
 
     <div class="grid-3">

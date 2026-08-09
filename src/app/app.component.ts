@@ -294,9 +294,12 @@ export class AppComponent implements OnInit, OnDestroy {
   stageRuleForm = {
     objectType: 'OPPORTUNITY' as 'LEAD' | 'OPPORTUNITY',
     toStageCode: 'NEGOTIATION',
-    actionType: 'CREATE_TASK' as 'CREATE_TASK' | 'TIMELINE_NOTE',
+    actionType: 'CREATE_TASK' as 'CREATE_TASK' | 'TIMELINE_NOTE' | 'ENROLL_SEQUENCE',
     title: 'Follow up after stage move',
+    sequenceId: null as number | null,
   };
+  pipelineAnalytics: Record<string, unknown> | null = null;
+  sequenceEnrollments: Array<Record<string, unknown>> = [];
   callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
   meetingTitle = 'Discovery call';
   adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
@@ -1580,10 +1583,18 @@ export class AppComponent implements OnInit, OnDestroy {
       },
       error: (err) => this.setError(err, 'Analytics failed'),
     });
+    this.api.pipelineAnalytics().subscribe({
+      next: (p) => (this.pipelineAnalytics = p || null),
+      error: () => (this.pipelineAnalytics = null),
+    });
     this.api.listOpenTasks().subscribe({
       next: (t) => (this.openTasks = t || []),
       error: () => (this.openTasks = []),
     });
+  }
+
+  pipelineRows(key: string): Array<Record<string, unknown>> {
+    return this.asRows(this.pipelineAnalytics, key);
   }
 
   private asRows(source: Record<string, unknown> | null, key: string): Array<Record<string, unknown>> {
@@ -1858,6 +1869,10 @@ export class AppComponent implements OnInit, OnDestroy {
     } else {
       this.stageAutomationRules = [];
     }
+    if (this.can('sequences')) {
+      this.loadSequences();
+      this.loadSequenceEnrollments();
+    }
     this.api.meters().subscribe({
       next: (m) => {
         this.meters = m;
@@ -2022,15 +2037,28 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     const title = this.stageRuleForm.title.trim();
-    if (!this.stageRuleForm.toStageCode.trim() || !title) {
-      this.error = 'Stage code and title/summary are required';
+    if (!this.stageRuleForm.toStageCode.trim()) {
+      this.error = 'Stage code is required';
+      return;
+    }
+    if (this.stageRuleForm.actionType !== 'ENROLL_SEQUENCE' && !title) {
+      this.error = 'Title/summary is required';
+      return;
+    }
+    if (this.stageRuleForm.actionType === 'ENROLL_SEQUENCE' && this.stageRuleForm.sequenceId == null) {
+      this.error = 'Pick a sequence for ENROLL_SEQUENCE';
       return;
     }
     this.busy = true;
     const actionConfig =
       this.stageRuleForm.actionType === 'CREATE_TASK'
         ? { title, dueHours: 24, priority: 'MEDIUM' }
-        : { summary: title };
+        : this.stageRuleForm.actionType === 'TIMELINE_NOTE'
+          ? { summary: title }
+          : {
+              sequenceId: this.stageRuleForm.sequenceId,
+              recipientFrom: 'PHONE',
+            };
     this.api
       .createStageAutomationRule({
         objectType: this.stageRuleForm.objectType,
@@ -2051,6 +2079,58 @@ export class AppComponent implements OnInit, OnDestroy {
           this.setError(err, 'Stage rule failed');
         },
       });
+  }
+
+  toggleStageRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api.setStageAutomationActive(id, !rule['active']).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Rule #${id} ${rule['active'] ? 'disabled' : 'enabled'}`;
+        this.loadOps();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Toggle rule failed');
+      },
+    });
+  }
+
+  loadSequenceEnrollments(): void {
+    if (!this.can('sequences')) {
+      return;
+    }
+    this.api.listSequenceEnrollments().subscribe({
+      next: (rows) => (this.sequenceEnrollments = rows || []),
+      error: () => (this.sequenceEnrollments = []),
+    });
+  }
+
+  actOnEnrollment(id: number, action: 'pause' | 'resume' | 'cancel' | 'retry'): void {
+    const call =
+      action === 'pause'
+        ? this.api.pauseSequenceEnrollment(id)
+        : action === 'resume'
+          ? this.api.resumeSequenceEnrollment(id)
+          : action === 'cancel'
+            ? this.api.cancelSequenceEnrollment(id)
+            : this.api.retrySequenceEnrollment(id);
+    this.busy = true;
+    call.subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Enrollment #${id} ${action}`;
+        this.loadSequenceEnrollments();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, `Enrollment ${action} failed`);
+      },
+    });
   }
 
   rescoreSelected(): void {

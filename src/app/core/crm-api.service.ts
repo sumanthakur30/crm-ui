@@ -196,6 +196,10 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/analytics/summary`);
   }
 
+  pipelineAnalytics(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/analytics/pipeline`);
+  }
+
   processSlaAging(): Observable<{ tasksCreated: number; openOverdueTasks: number }> {
     return this.http.post<{ tasksCreated: number; openOverdueTasks: number }>(
       `${this.base}/tasks/sla/process-aging`,
@@ -293,6 +297,26 @@ export class CrmApiService {
       `${this.base}/sequences/process-due?limit=${limit}`,
       {}
     );
+  }
+
+  listSequenceEnrollments(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/sequences/enrollments`);
+  }
+
+  pauseSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/pause`, {});
+  }
+
+  resumeSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/resume`, {});
+  }
+
+  cancelSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/cancel`, {});
+  }
+
+  retrySequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/retry`, {});
   }
 
   fieldForceEmbedConfig(): Observable<FieldForceEmbedConfig> {
@@ -394,6 +418,11 @@ export class CrmApiService {
 
   createStageAutomationRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/automation/stage-rules`, body);
+  }
+
+  setStageAutomationActive(id: number, active: boolean): Observable<Record<string, unknown>> {
+    const path = active ? 'activate' : 'deactivate';
+    return this.http.post<Record<string, unknown>>(`${this.base}/automation/stage-rules/${id}/${path}`, {});
   }
 
   logCall(body: Record<string, unknown>): Observable<Record<string, unknown>> {
