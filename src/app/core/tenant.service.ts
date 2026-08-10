@@ -6,7 +6,7 @@ const STORAGE_KEY = 'crm.tenantId';
 @Injectable({ providedIn: 'root' })
 export class TenantService {
   private readonly tenantSubject = new BehaviorSubject<string>(
-    localStorage.getItem(STORAGE_KEY) || 'demo-crm'
+    localStorage.getItem(STORAGE_KEY) || 'CRM-DEMO-01'
   );
 
   readonly tenantId$ = this.tenantSubject.asObservable();
@@ -16,7 +16,7 @@ export class TenantService {
   }
 
   setTenantId(tenantId: string): void {
-    const next = (tenantId || '').trim() || 'demo-crm';
+    const next = (tenantId || '').trim() || 'CRM-DEMO-01';
     localStorage.setItem(STORAGE_KEY, next);
     this.tenantSubject.next(next);
   }

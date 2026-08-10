@@ -8,9 +8,9 @@
   </div>
   <div class="tenant-bar">
     <label for="tenant">Tenant</label>
-    <input id="tenant" [(ngModel)]="tenantDraft" name="tenant" placeholder="demo-crm" />
+    <input id="tenant" [(ngModel)]="tenantDraft" name="tenant" placeholder="CRM-DEMO-01" />
     <label for="shop">Shop</label>
-    <input id="shop" [(ngModel)]="shopDraft" name="shop" placeholder="numeric shop id" title="Optional X-Shop-Id for live user-service convert" />
+    <input id="shop" [(ngModel)]="shopDraft" name="shop" placeholder="CRM-DEMO-01" title="X-Shop-Id (use shopId string, e.g. CRM-DEMO-01)" />
     <button type="button" class="btn" (click)="saveTenant()">Set</button>
     <button type="button" class="btn" (click)="showLogin = !showLogin">Login</button>
     <button type="button" class="btn ghost" *ngIf="hasAuthToken" (click)="logout()">Logout</button>
@@ -29,7 +29,10 @@
     <input type="password" [(ngModel)]="loginPassword" name="loginPass" placeholder="password" />
     <button type="button" class="btn primary" [disabled]="busy" (click)="login()">Sign in</button>
   </div>
-  <p class="hint">Uses auth-service POST /api/v1/auth/login. MFA users: complete MFA elsewhere, then paste token below.</p>
+  <p class="hint">
+    Demo: shopId <code>CRM-DEMO-01</code> · user <code>demo</code> · password <code>Demo@2026</code>.
+    Uses auth-service POST /api/v1/auth/login (Bearer required for /api/v1/crm/**).
+  </p>
   <div class="row wrap">
     <input [(ngModel)]="authUserDraft" name="authUser" placeholder="user id" style="max-width: 7rem" />
     <input [(ngModel)]="authTokenDraft" name="authTok" placeholder="Bearer token (optional)" style="min-width: 12rem" />

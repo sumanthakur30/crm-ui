@@ -65,8 +65,8 @@ export class AppComponent implements OnInit, OnDestroy {
   searchQ = '';
   authTokenDraft = '';
   authUserDraft = '';
-  loginShopId = '';
-  loginUsername = '';
+  loginShopId = 'CRM-DEMO-01';
+  loginUsername = 'demo';
   loginPassword = '';
   showLogin = false;
 
@@ -393,11 +393,15 @@ export class AppComponent implements OnInit, OnDestroy {
         this.module = m;
       }
     });
-    this.refreshStatus();
-    this.loadEntitlements();
     this.loadTemplates();
-    this.reloadAll();
     this.loadFfEmbedConfig();
+    if (this.auth.getAccessToken()) {
+      this.refreshStatus();
+      this.reloadAll();
+    } else {
+      this.showLogin = true;
+      this.message = 'Sign in required — use Auth login (gateway rejects CRM APIs without JWT)';
+    }
     window.addEventListener('online', () => (this.offlineReady = true));
     window.addEventListener('offline', () => (this.offlineReady = false));
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -586,7 +590,12 @@ export class AppComponent implements OnInit, OnDestroy {
     this.selectedLead = null;
     this.selectedOpp = null;
     this.selectedQuote = null;
-    this.reloadAll();
+    if (this.auth.getAccessToken()) {
+      this.reloadAll();
+    } else {
+      this.showLogin = true;
+      this.error = 'Sign in required before loading CRM data (HTTP 401 without Bearer token)';
+    }
   }
 
   saveAuth(): void {
@@ -612,17 +621,23 @@ export class AppComponent implements OnInit, OnDestroy {
           this.error = 'MFA required — complete MFA in shop UI, then paste token here';
           return;
         }
-        this.authTokenDraft = res.accessToken || '';
+        // Ensure token is persisted before any CRM reload (interceptor reads localStorage).
+        if (res.accessToken) {
+          this.auth.setAccessToken(res.accessToken);
+        }
+        this.authTokenDraft = this.auth.getAccessToken() || '';
         this.authUserDraft = res.username || this.loginUsername;
         this.hasAuthToken = !!this.authTokenDraft;
-        if (res.shopId) {
-          this.tenantDraft = String(res.shopId);
-          this.saveTenant();
-        }
+        const shop = String(res.shopId || this.loginShopId).trim();
+        this.tenantDraft = shop;
+        this.shopDraft = shop;
+        this.tenant.setTenantId(shop);
+        this.tenant.setShopId(shop);
         this.loginPassword = '';
         this.showLogin = false;
         this.message = `Logged in as ${res.username} (${res.role})`;
         this.error = '';
+        this.reloadAll();
         this.refreshStatus();
       },
       error: (err) => {
@@ -694,6 +709,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   reloadAll(): void {
+    if (!this.auth.getAccessToken()) {
+      this.hasAuthToken = false;
+      this.showLogin = true;
+      this.error = 'Sign in required — CRM APIs need a Bearer JWT (Auth login)';
+      return;
+    }
+    this.hasAuthToken = true;
     this.loadEntitlements();
     this.loadLeads();
     this.loadMembers();
@@ -792,6 +814,11 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   loadLeads(): void {
+    if (!this.auth.getAccessToken()) {
+      this.setError({ status: 401, message: 'Sign in required' }, 'Sign in required before loading leads');
+      this.showLogin = true;
+      return;
+    }
     this.api.listLeads(this.searchQ).subscribe({
       next: (page) => {
         this.leads = page.content || [];
@@ -3473,6 +3500,13 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private setError(err: unknown, fallback: string): void {
     const e = err as { error?: { message?: string; error?: string }; message?: string; status?: number };
+    if (e?.status === 401) {
+      this.hasAuthToken = false;
+      this.showLogin = true;
+      this.error =
+        'Unauthorized (HTTP 401) — click Login and sign in with shopId / username / password, then retry';
+      return;
+    }
     const detail = e?.error?.message || e?.error?.error || e?.message || fallback;
     this.error = typeof detail === 'string' ? detail : fallback;
     if (e?.status) {
