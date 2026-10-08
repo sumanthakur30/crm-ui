@@ -193,15 +193,103 @@
 
   <!-- ========== LEADS ========== -->
   <ng-container *ngIf="module === 'leads'">
-    <div class="grid-3">
-      <section class="panel">
-        <h2>Create lead</h2>
-        <form class="form" (ngSubmit)="createLead()">
-          <label>Title * <input required [(ngModel)]="leadForm.title" name="title" /></label>
-          <label>Contact name <input [(ngModel)]="leadForm.displayName" name="displayName" /></label>
-          <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
+    <header class="page-head">
+      <div>
+        <h2>Leads</h2>
+        <p class="hint">Work the pipeline, then convert a lead into an account and deal. Shop billing uses Convert to shop.</p>
+      </div>
+      <div class="row wrap">
+        <input [(ngModel)]="searchQ" name="q" placeholder="Search name, phone, company" (keyup.enter)="loadLeads()" />
+        <button type="button" class="btn" (click)="loadLeads()">Search</button>
+        <button type="button" class="btn" [class.primary]="showLeadFilters" (click)="showLeadFilters = !showLeadFilters">Filters</button>
+        <button type="button" class="btn" (click)="showLeadTools = !showLeadTools">{{ showLeadTools ? 'Hide tools' : 'Import / team' }}</button>
+        <button type="button" class="btn primary" (click)="showCreateLead = !showCreateLead">{{ showCreateLead ? 'Close form' : 'New lead' }}</button>
+      </div>
+    </header>
+
+    <div class="filter-pop" *ngIf="showLeadFilters">
+      <label>Status
+        <select [(ngModel)]="leadFilterStatus" name="fltStatus" (ngModelChange)="applyLeadFilters()">
+          <option value="">Any</option>
+          <option value="OPEN">Open</option>
+          <option value="QUALIFIED">Qualified</option>
+          <option value="CONVERTED">Converted</option>
+          <option value="LOST">Lost</option>
+          <option value="DUPLICATE">Duplicate</option>
+        </select>
+      </label>
+      <label>Source
+        <select [(ngModel)]="leadFilterSource" name="fltSource" (ngModelChange)="applyLeadFilters()">
+          <option value="">Any</option>
+          <option *ngFor="let s of leadSourceOptions" [value]="s.code">{{ s.label }}</option>
+        </select>
+      </label>
+      <label>Owner
+        <select [(ngModel)]="leadFilterOwner" name="fltOwner" (ngModelChange)="applyLeadFilters()">
+          <option value="">Any</option>
+          <option *ngFor="let owner of leadOwnerOptions()" [value]="owner">{{ owner }}</option>
+        </select>
+      </label>
+      <button type="button" class="btn ghost" (click)="clearLeadFilters()">Clear</button>
+    </div>
+
+    <div class="lifecycle" *ngIf="stages.length">
+      <button
+        type="button"
+        class="chip"
+        *ngFor="let s of stages"
+        [class.active]="leadFilterStageId === s.id"
+        (click)="toggleStageFilter(s.id)"
+      >
+        {{ s.name }} <span>{{ stageLeadCount(s.id) }}</span>
+      </button>
+    </div>
+
+    <section class="panel" *ngIf="showCreateLead">
+      <h2>New lead</h2>
+      <p class="hint">Title is required. Source defaults to Phone call. Link an account only when you already know it.</p>
+      <form class="form" (ngSubmit)="createLead()">
+        <p class="section-label">Basic information</p>
+        <label>Title * <input required [(ngModel)]="leadForm.title" name="title" placeholder="What they asked for" /></label>
+        <label>Contact name <input [(ngModel)]="leadForm.displayName" name="displayName" placeholder="Person" /></label>
+        <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
+        <div class="row wrap">
           <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
           <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
+        </div>
+        <label>Source
+          <select [(ngModel)]="leadForm.sourceCode" name="source">
+            <option *ngFor="let s of leadSourceOptions" [value]="s.code">{{ s.label }}</option>
+          </select>
+        </label>
+        <button type="button" class="btn ghost" (click)="showCreateMore = !showCreateMore">
+          {{ showCreateMore ? 'Hide extra fields' : 'Campaign, account, UTM' }}
+        </button>
+        <ng-container *ngIf="showCreateMore">
+          <p class="section-label">Ownership and campaign</p>
+          <label>Priority
+            <select [(ngModel)]="leadForm.priority" name="leadPriority">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HIGH">High</option>
+              <option value="HOT">Hot</option>
+            </select>
+          </label>
+          <div class="row wrap">
+            <label>Expected value <input type="number" [(ngModel)]="leadForm.amount" name="leadAmt" /></label>
+            <label>Currency
+              <select [(ngModel)]="leadForm.currency" name="leadCur">
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+              </select>
+            </label>
+          </div>
+          <label>Owner
+            <select [(ngModel)]="leadForm.ownerUserId" name="leadOwner">
+              <option value="">Unassigned</option>
+              <option *ngFor="let m of members" [value]="m.userId">{{ m.displayName || m.userId }}</option>
+            </select>
+          </label>
           <label>Account
             <select [(ngModel)]="leadForm.accountId" name="leadAcct" (ngModelChange)="onLeadAccountChange()">
               <option [ngValue]="null">— none —</option>
@@ -225,10 +313,12 @@
             <label>utm_medium <input [(ngModel)]="leadForm.utmMedium" name="utmMed" /></label>
             <label>utm_campaign <input [(ngModel)]="leadForm.utmCampaign" name="utmCamp" /></label>
           </div>
-          <button type="submit" class="btn primary" [disabled]="busy">Create</button>
-        </form>
-      </section>
+        </ng-container>
+        <button type="submit" class="btn primary" [disabled]="busy">Create lead</button>
+      </form>
+    </section>
 
+    <div class="grid-2" *ngIf="showLeadTools">
       <section class="panel">
         <h2>Import</h2>
         <input type="file" accept=".csv,.txt,.xlsx" (change)="onFileSelected($event)" />
@@ -236,10 +326,9 @@
           <input type="checkbox" [(ngModel)]="assignRoundRobin" name="rr" />
           Round-robin after import
         </label>
-        <button type="button" class="btn primary" [disabled]="busy || !importFile" (click)="uploadImport()">Upload</button>
+        <button type="button" class="btn" [disabled]="busy || !importFile" (click)="uploadImport()">Upload</button>
         <p class="hint" *ngIf="importResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
       </section>
-
       <section class="panel">
         <h2>Team (round-robin)</h2>
         <form class="form row wrap" (ngSubmit)="addMember()">
@@ -260,16 +349,13 @@
     <section class="panel">
       <div class="row between wrap">
         <div class="row wrap">
-          <h2>Pipeline board</h2>
+          <h2>Pipeline</h2>
           <div class="view-toggle">
             <button type="button" class="btn" [class.primary]="view === 'kanban'" (click)="view = 'kanban'">Kanban</button>
             <button type="button" class="btn" [class.primary]="view === 'list'" (click)="view = 'list'">List</button>
           </div>
         </div>
-        <div class="row">
-          <input [(ngModel)]="searchQ" name="q" placeholder="Search…" (keyup.enter)="loadLeads()" />
-          <button type="button" class="btn" (click)="loadLeads()">Search</button>
-        </div>
+        <p class="hint">{{ visibleLeads().length }} shown</p>
       </div>
 
       <div class="kanban" *ngIf="view === 'kanban' && stages.length; else leadFallback">
@@ -288,8 +374,7 @@
             <p>{{ lead.displayName || lead.companyName || '—' }}</p>
             <p class="muted">{{ lead.ownerUserId || 'Unassigned' }}</p>
             <p>
-              <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.scoreBand || '—' }}</span>
-              <span class="muted"> · {{ lead.score }}</span>
+              <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.score }} — {{ lead.scoreBand || '—' }}</span>
             </p>
             <div class="move" (click)="$event.stopPropagation()">
               <select
@@ -310,23 +395,30 @@
           <table>
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Stage</th>
-                <th>Owner</th>
+                <th>Lead</th>
+                <th>Company</th>
                 <th>Phone</th>
+                <th>Stage</th>
                 <th>Status</th>
+                <th>Owner</th>
+                <th>Score</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let lead of leads" (click)="openLead(lead)" class="clickable">
-                <td>{{ lead.title }}</td>
-                <td>{{ stageName(lead.stageId) }}</td>
-                <td>{{ lead.ownerUserId || '—' }}</td>
+              <tr *ngFor="let lead of visibleLeads()" (click)="openLead(lead)" class="clickable">
+                <td>
+                  <strong>{{ lead.title }}</strong>
+                  <div class="muted">{{ lead.displayName || '—' }}</div>
+                </td>
+                <td>{{ lead.companyName || '—' }}</td>
                 <td>{{ lead.phone || '—' }}</td>
+                <td>{{ stageName(lead.stageId) }}</td>
                 <td><span class="badge">{{ lead.status }}</span></td>
+                <td>{{ lead.ownerUserId || 'Unassigned' }}</td>
+                <td><span [class]="scoreBandClass(lead.scoreBand)">{{ lead.score }} — {{ lead.scoreBand || '—' }}</span></td>
               </tr>
-              <tr *ngIf="!leads.length">
-                <td colspan="5" class="empty">No leads yet.</td>
+              <tr *ngIf="!visibleLeads().length">
+                <td colspan="7" class="empty">No leads match these filters.</td>
               </tr>
             </tbody>
           </table>
@@ -1371,11 +1463,41 @@
   <div class="drawer-head">
     <div>
       <h2>{{ lead.title }}</h2>
-      <p class="muted">#{{ lead.id }} · {{ stageName(lead.stageId) }} · {{ lead.status }}</p>
+      <p class="muted">{{ lead.companyName || lead.displayName || 'No company' }} · {{ lead.ownerUserId || 'Unassigned' }}</p>
+      <div class="row wrap lead-badges">
+        <span class="badge">{{ lead.status }}</span>
+        <span class="badge">{{ stageName(lead.stageId) }}</span>
+        <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.score }} — {{ lead.scoreBand || '—' }}</span>
+        <span class="badge" *ngIf="lead.priority">{{ lead.priority }}</span>
+      </div>
     </div>
     <button type="button" class="btn ghost" (click)="closeLead()">Close</button>
   </div>
 
+  <div class="row wrap lead-actions">
+    <button type="button" class="btn primary" (click)="openConvertWizard()">Convert to CRM</button>
+    <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Log call</button>
+    <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Add note</button>
+    <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
+    <button type="button" class="btn ghost" (click)="showMoreLeadActions = !showMoreLeadActions">More</button>
+  </div>
+  <div class="more-menu" *ngIf="showMoreLeadActions">
+    <button type="button" class="btn" (click)="rescoreSelected()">Rescore</button>
+    <button type="button" class="btn" (click)="findDuplicates(); leadDrawerTab = 'more'">Find duplicates</button>
+    <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? 'Write a short summary of this lead' : upgradeHint('AI')" (click)="runAi('summarize'); leadDrawerTab = 'more'">AI summary</button>
+    <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? 'Suggest the next sales action' : upgradeHint('AI')" (click)="runAi('nba'); leadDrawerTab = 'more'">Next best action</button>
+    <button type="button" class="btn" (click)="leadDrawerTab = 'shop'">Convert to shop</button>
+  </div>
+
+  <div class="row wrap drawer-tabs">
+    <button type="button" class="btn" [class.primary]="leadDrawerTab === 'overview'" (click)="leadDrawerTab = 'overview'">Overview</button>
+    <button type="button" class="btn" [class.primary]="leadDrawerTab === 'convert'" (click)="openConvertWizard()">Convert</button>
+    <button type="button" class="btn" [class.primary]="leadDrawerTab === 'activity'" (click)="leadDrawerTab = 'activity'">Activity</button>
+    <button type="button" class="btn" [class.primary]="leadDrawerTab === 'shop'" (click)="leadDrawerTab = 'shop'">Shop</button>
+    <button type="button" class="btn" [class.primary]="leadDrawerTab === 'more'" (click)="leadDrawerTab = 'more'">More</button>
+  </div>
+
+  <ng-container *ngIf="leadDrawerTab === 'overview'">
   <dl class="meta" *ngIf="!editingLead">
     <div><dt>Contact</dt><dd>{{ lead.displayName || '—' }}</dd></div>
     <div><dt>Company</dt><dd>{{ lead.companyName || '—' }}</dd></div>
@@ -1383,7 +1505,7 @@
     <div><dt>Phone</dt><dd>{{ lead.phone || '—' }}</dd></div>
     <div><dt>Email</dt><dd>{{ lead.email || '—' }}</dd></div>
     <div><dt>Owner</dt><dd>{{ lead.ownerUserId || 'Unassigned' }}</dd></div>
-    <div><dt>Source</dt><dd>{{ lead.sourceCode || '—' }}</dd></div>
+    <div><dt>Source</dt><dd>{{ sourceLabel(lead.sourceCode) }}</dd></div>
     <div><dt>Campaign</dt><dd>{{ campaignName(lead.campaignId) }}</dd></div>
     <div><dt>UTM</dt><dd>{{ lead.utmSource || '—' }} / {{ lead.utmMedium || '—' }} / {{ lead.utmCampaign || '—' }}</dd></div>
   </dl>
@@ -1399,7 +1521,16 @@
       <label>Company <input [(ngModel)]="editLeadForm.companyName" name="editCompany" /></label>
       <label>Phone <input [(ngModel)]="editLeadForm.phone" name="editPhone" /></label>
       <label>Email <input type="email" [(ngModel)]="editLeadForm.email" name="editEmail" /></label>
-      <label>Source <input [(ngModel)]="editLeadForm.sourceCode" name="editSource" /></label>
+      <label>Source
+        <select [(ngModel)]="editLeadForm.sourceCode" name="editSource">
+          <option value="">—</option>
+          <option
+            *ngIf="editLeadForm.sourceCode && !isKnownSource(editLeadForm.sourceCode)"
+            [value]="editLeadForm.sourceCode"
+          >{{ editLeadForm.sourceCode }}</option>
+          <option *ngFor="let s of leadSourceOptions" [value]="s.code">{{ s.label }}</option>
+        </select>
+      </label>
       <label>
         Priority
         <select [(ngModel)]="editLeadForm.priority" name="editPriority">
@@ -1425,81 +1556,108 @@
       </div>
     </form>
   </section>
+  </ng-container>
 
-  <section>
-    <h3>Convert to CRM party</h3>
-    <p class="hint">Create or link Account / Contact, optionally open an Opportunity. Separate from ERP convert below.</p>
-    <label>
-      Account
+  <section *ngIf="leadDrawerTab === 'convert'">
+    <h3>Convert to CRM</h3>
+    <p class="hint">Account, then contact, then an optional deal. This does not create a shop customer. Use the Shop tab for that.</p>
+    <ol class="wizard-steps">
+      <li [class.active]="convertStep === 1">1 Account</li>
+      <li [class.active]="convertStep === 2">2 Contact</li>
+      <li [class.active]="convertStep === 3">3 Opportunity</li>
+      <li [class.active]="convertStep === 4">4 Confirm</li>
+    </ol>
+
+    <ng-container *ngIf="convertStep === 1">
+      <label>
+        Account
+        <select
+          [(ngModel)]="partyConvertForm.accountMode"
+          name="pcAcctMode"
+          (ngModelChange)="onPartyAccountModeChange()"
+        >
+          <option value="CREATE">Create new</option>
+          <option value="EXISTING">Existing</option>
+        </select>
+      </label>
+      <ng-container *ngIf="partyConvertForm.accountMode === 'CREATE'">
+        <input class="full" [(ngModel)]="partyConvertForm.accountName" name="pcAcctName" placeholder="Account name" />
+        <div class="row wrap">
+          <input [(ngModel)]="partyConvertForm.accountGstin" name="pcGstin" placeholder="GSTIN" />
+          <input [(ngModel)]="partyConvertForm.accountPhone" name="pcAcctPhone" placeholder="Phone" />
+          <input [(ngModel)]="partyConvertForm.accountEmail" name="pcAcctEmail" placeholder="Email" />
+        </div>
+      </ng-container>
       <select
-        [(ngModel)]="partyConvertForm.accountMode"
-        name="pcAcctMode"
-        (ngModelChange)="onPartyAccountModeChange()"
+        *ngIf="partyConvertForm.accountMode === 'EXISTING'"
+        class="full"
+        [(ngModel)]="partyConvertForm.accountId"
+        name="pcAcctId"
+        (ngModelChange)="onPartyAccountPicked()"
       >
-        <option value="CREATE">Create new</option>
-        <option value="EXISTING">Existing</option>
+        <option [ngValue]="null" disabled>Pick account</option>
+        <option *ngFor="let a of accounts" [ngValue]="a.id">{{ a.name }}</option>
       </select>
-    </label>
-    <ng-container *ngIf="partyConvertForm.accountMode === 'CREATE'">
-      <input class="full" [(ngModel)]="partyConvertForm.accountName" name="pcAcctName" placeholder="Account name" />
-      <div class="row wrap">
-        <input [(ngModel)]="partyConvertForm.accountGstin" name="pcGstin" placeholder="GSTIN" />
-        <input [(ngModel)]="partyConvertForm.accountPhone" name="pcAcctPhone" placeholder="Phone" />
-        <input [(ngModel)]="partyConvertForm.accountEmail" name="pcAcctEmail" placeholder="Email" />
-      </div>
     </ng-container>
-    <select
-      *ngIf="partyConvertForm.accountMode === 'EXISTING'"
-      class="full"
-      [(ngModel)]="partyConvertForm.accountId"
-      name="pcAcctId"
-      (ngModelChange)="onPartyAccountPicked()"
-    >
-      <option [ngValue]="null" disabled>Pick account</option>
-      <option *ngFor="let a of accounts" [ngValue]="a.id">{{ a.name }}</option>
-    </select>
 
-    <label>
-      Contact
-      <select [(ngModel)]="partyConvertForm.contactMode" name="pcCtMode">
-        <option value="CREATE">Create new</option>
-        <option value="EXISTING">Existing</option>
-        <option value="NONE">Skip</option>
+    <ng-container *ngIf="convertStep === 2">
+      <label>
+        Contact
+        <select [(ngModel)]="partyConvertForm.contactMode" name="pcCtMode">
+          <option value="CREATE">Create new</option>
+          <option value="EXISTING">Existing</option>
+          <option value="NONE">Skip</option>
+        </select>
+      </label>
+      <ng-container *ngIf="partyConvertForm.contactMode === 'CREATE'">
+        <input class="full" [(ngModel)]="partyConvertForm.contactName" name="pcCtName" placeholder="Contact name" />
+        <div class="row wrap">
+          <input [(ngModel)]="partyConvertForm.contactTitle" name="pcCtTitle" placeholder="Title" />
+          <input [(ngModel)]="partyConvertForm.contactPhone" name="pcCtPhone" placeholder="Phone" />
+          <input [(ngModel)]="partyConvertForm.contactEmail" name="pcCtEmail" placeholder="Email" />
+        </div>
+      </ng-container>
+      <select
+        *ngIf="partyConvertForm.contactMode === 'EXISTING'"
+        class="full"
+        [(ngModel)]="partyConvertForm.contactId"
+        name="pcCtId"
+      >
+        <option [ngValue]="null" disabled>Pick contact</option>
+        <option *ngFor="let c of leadContacts" [ngValue]="c.id">{{ c.displayName }}</option>
       </select>
-    </label>
-    <ng-container *ngIf="partyConvertForm.contactMode === 'CREATE'">
-      <input class="full" [(ngModel)]="partyConvertForm.contactName" name="pcCtName" placeholder="Contact name" />
-      <div class="row wrap">
-        <input [(ngModel)]="partyConvertForm.contactTitle" name="pcCtTitle" placeholder="Title" />
-        <input [(ngModel)]="partyConvertForm.contactPhone" name="pcCtPhone" placeholder="Phone" />
-        <input [(ngModel)]="partyConvertForm.contactEmail" name="pcCtEmail" placeholder="Email" />
-      </div>
     </ng-container>
-    <select
-      *ngIf="partyConvertForm.contactMode === 'EXISTING'"
-      class="full"
-      [(ngModel)]="partyConvertForm.contactId"
-      name="pcCtId"
-    >
-      <option [ngValue]="null" disabled>Pick contact</option>
-      <option *ngFor="let c of leadContacts" [ngValue]="c.id">{{ c.displayName }}</option>
-    </select>
 
-    <label class="check">
-      <input type="checkbox" [(ngModel)]="partyConvertForm.createOpportunity" name="pcOpp" /> Create opportunity
-    </label>
-    <ng-container *ngIf="partyConvertForm.createOpportunity">
-      <input class="full" [(ngModel)]="partyConvertForm.oppName" name="pcOppName" placeholder="Opportunity name" />
-      <input type="number" [(ngModel)]="partyConvertForm.oppAmount" name="pcOppAmt" placeholder="Amount" />
+    <ng-container *ngIf="convertStep === 3">
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="partyConvertForm.createOpportunity" name="pcOpp" /> Create opportunity
+      </label>
+      <ng-container *ngIf="partyConvertForm.createOpportunity">
+        <input class="full" [(ngModel)]="partyConvertForm.oppName" name="pcOppName" placeholder="Opportunity name" />
+        <input type="number" [(ngModel)]="partyConvertForm.oppAmount" name="pcOppAmt" placeholder="Amount" />
+      </ng-container>
+      <p class="hint" *ngIf="!partyConvertForm.createOpportunity">No deal will be opened. You can add one later from Deals.</p>
     </ng-container>
-    <label class="check">
-      <input type="checkbox" [(ngModel)]="partyConvertForm.markLeadConverted" name="pcMark" /> Mark lead CONVERTED
-    </label>
-    <div class="row wrap">
-      <button type="button" class="btn primary" [disabled]="busy" (click)="convertLeadToCrmParty()">
-        Convert to CRM
-      </button>
+
+    <ng-container *ngIf="convertStep === 4">
+      <dl class="meta">
+        <div><dt>Account</dt><dd>{{ convertAccountSummary() }}</dd></div>
+        <div><dt>Contact</dt><dd>{{ convertContactSummary() }}</dd></div>
+        <div><dt>Opportunity</dt><dd>{{ partyConvertForm.createOpportunity ? (partyConvertForm.oppName || 'New deal') : 'None' }}</dd></div>
+        <div *ngIf="partyConvertForm.createOpportunity"><dt>Amount</dt><dd>{{ partyConvertForm.oppAmount != null ? partyConvertForm.oppAmount : '—' }}</dd></div>
+      </dl>
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="partyConvertForm.markLeadConverted" name="pcMark" /> Mark lead CONVERTED
+      </label>
       <button type="button" class="btn" [disabled]="busy" (click)="createOpportunity(lead)">Quick opportunity only</button>
+    </ng-container>
+
+    <div class="row wrap">
+      <button type="button" class="btn ghost" *ngIf="convertStep > 1" (click)="convertStepBack()">Back</button>
+      <button type="button" class="btn" *ngIf="convertStep < 4" (click)="convertStepNext()">Next</button>
+      <button type="button" class="btn primary" *ngIf="convertStep === 4" [disabled]="busy" (click)="convertLeadToCrmParty()">
+        Convert lead
+      </button>
     </div>
     <p class="hint" *ngIf="lastPartyConvert as pc">
       Last: {{ pc['status'] }} · account {{ pc['accountId'] || '—' }}
@@ -1508,26 +1666,8 @@
     </p>
   </section>
 
-  <section>
-    <h3>Score / call / meeting</h3>
-    <p class="hint">
-      Score: {{ lead.score }}
-      <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.scoreBand || '—' }}</span>
-    </p>
-    <div class="row wrap">
-      <button type="button" class="btn" (click)="rescoreSelected()">Rescore</button>
-      <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
-      <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? '' : upgradeHint('AI')" (click)="runAi('nba')">AI NBA</button>
-      <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? '' : upgradeHint('AI')" (click)="runAi('summarize')">AI summary</button>
-      <button type="button" class="btn" (click)="findDuplicates()">Find duplicates</button>
-    </div>
-    <ul class="member-list" *ngIf="duplicateHits.length">
-      <li *ngFor="let d of duplicateHits">
-        <strong>#{{ d['id'] }}</strong>
-        <span class="muted">{{ d['title'] || d['displayName'] || '—' }} · {{ d['phone'] || d['email'] || '' }}</span>
-        <button type="button" class="btn" (click)="mergeDuplicateIntoSelected(+$any(d['id']))">Merge into this</button>
-      </li>
-    </ul>
+  <section *ngIf="leadDrawerTab === 'activity'">
+    <h3>Log a call</h3>
     <div class="row wrap">
       <input [(ngModel)]="callForm.phone" name="callPhone" [placeholder]="lead.phone || 'phone'" />
       <input type="number" [(ngModel)]="callForm.durationSec" name="callDur" />
@@ -1542,13 +1682,31 @@
         Call
       </button>
     </div>
+  </section>
+
+  <section *ngIf="leadDrawerTab === 'more'">
+    <h3>AI assistant</h3>
+    <p class="hint">Summary, next action, rescore, and duplicate check. Each action explains itself on the button.</p>
+    <div class="row wrap">
+      <button type="button" class="btn" (click)="rescoreSelected()" title="Recalculate the numeric score and Cold / Warm / Hot band">Rescore</button>
+      <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? 'Suggest the next sales action' : upgradeHint('AI')" (click)="runAi('nba')">Next best action</button>
+      <button type="button" class="btn" [disabled]="!can('ai')" [title]="can('ai') ? 'Write a short summary of this lead' : upgradeHint('AI')" (click)="runAi('summarize')">AI summary</button>
+      <button type="button" class="btn" (click)="findDuplicates()" title="Find other leads that look like this one">Find duplicates</button>
+    </div>
+    <ul class="member-list" *ngIf="duplicateHits.length">
+      <li *ngFor="let d of duplicateHits">
+        <strong>#{{ d['id'] }}</strong>
+        <span class="muted">{{ d['title'] || d['displayName'] || '—' }} · {{ d['phone'] || d['email'] || '' }}</span>
+        <button type="button" class="btn" (click)="mergeDuplicateIntoSelected(+$any(d['id']))">Merge into this</button>
+      </li>
+    </ul>
     <div class="ai-result" *ngIf="lastInsight as ins">
       <strong>{{ ins['title'] }}</strong>
       <pre>{{ ins['body'] }}</pre>
     </div>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'overview'">
     <h3>Qualification</h3>
     <p class="hint">BANT (or tenant schema) answers on this lead.</p>
     <select [(ngModel)]="qualificationSchemaCode" name="qualSchema" (ngModelChange)="qualificationAnswers = {}">
@@ -1576,8 +1734,8 @@
     </ng-template>
   </section>
 
-  <section>
-    <h3>Convert to ERP</h3>
+  <section *ngIf="leadDrawerTab === 'shop'">
+    <h3>Convert to shop</h3>
     <p class="hint">
       Creates a Retail <strong>customer</strong> (user-service) or Field Force lead — not an order.
       Pilot default uses local sink; set <code>CRM_CONVERT_SHOP_URL</code> to
@@ -1602,7 +1760,7 @@
     </p>
   </section>
 
-  <section *ngIf="can('sequences'); else sequencesLocked">
+  <section *ngIf="leadDrawerTab === 'more' && can('sequences'); else sequencesLocked">
     <h3>Sequence builder</h3>
     <div class="row wrap">
       <select [ngModel]="sequenceId" (ngModelChange)="onSequencePicked($event)" name="seqPick">
@@ -1659,13 +1817,13 @@
     </div>
   </section>
   <ng-template #sequencesLocked>
-    <section>
+    <section *ngIf="leadDrawerTab === 'more'">
       <h3>Sequence builder</h3>
       <p class="hint">{{ upgradeHint('Sequences') }}</p>
     </section>
   </ng-template>
 
-  <section *ngIf="ffEmbed?.enabled">
+  <section *ngIf="leadDrawerTab === 'more' && ffEmbed?.enabled">
     <h3>Field Force visit</h3>
     <p class="hint muted">{{ ffVisitUrl || 'Configure crm.field-force.visit-url-template' }}</p>
     <div class="row wrap">
@@ -1674,7 +1832,7 @@
     </div>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'overview'">
     <h3>Tags</h3>
     <div class="row wrap">
       <span class="badge" *ngFor="let t of leadTags" [style.background]="t.color || '#dde3ea'" (click)="removeLeadTag(t.id)" title="Click to remove">{{ t.name }} ×</span>
@@ -1688,7 +1846,7 @@
     </div>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'more'">
     <h3>Attachments</h3>
     <ul class="member-list">
       <li *ngFor="let a of leadAttachments">
@@ -1704,14 +1862,14 @@
     <button type="button" class="btn" (click)="addLeadAttachment()">Add attachment</button>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'overview'">
     <h3>Move stage</h3>
     <select class="full" [ngModel]="lead.stageId" (ngModelChange)="moveLead(lead, +$event)" name="drawerStage">
       <option *ngFor="let s of stages" [ngValue]="s.id">{{ s.name }}</option>
     </select>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'overview'">
     <h3>Assign</h3>
     <div class="row wrap">
       <label class="check"><input type="radio" name="amode" [(ngModel)]="assignMode" value="ROUND_ROBIN" /> Round-robin</label>
@@ -1721,7 +1879,7 @@
     <button type="button" class="btn primary" [disabled]="busy" (click)="assignSelected()">Assign</button>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'activity'">
     <h3>Message (WA / SMS / Email)</h3>
     <p class="hint">Queues via notification-service when enabled; always writes MESSAGE_* on timeline.</p>
     <div class="row wrap">
@@ -1761,13 +1919,13 @@
     </div>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'activity'">
     <h3>Add note</h3>
     <textarea [(ngModel)]="noteDraft" name="note" rows="3" placeholder="Follow-up notes…"></textarea>
     <button type="button" class="btn" [disabled]="busy || !noteDraft.trim()" (click)="addNote()">Save note</button>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'activity'">
     <h3>Offline note <span class="badge" [class]="offlineReady ? '' : 'warn'">{{ offlineReady ? 'online' : 'offline' }}</span></h3>
     <textarea [(ngModel)]="offlineNote" name="offNote" rows="3" placeholder="Draft locally when network is flaky…"></textarea>
     <div class="row wrap">
@@ -1777,7 +1935,7 @@
     </div>
   </section>
 
-  <section>
+  <section *ngIf="leadDrawerTab === 'activity'">
     <h3>Timeline</h3>
     <ul class="timeline">
       <li *ngFor="let item of timeline">

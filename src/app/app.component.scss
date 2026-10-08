@@ -540,7 +540,7 @@ tr.selected,
   position: fixed;
   top: 0;
   right: 0;
-  width: min(400px, 92vw);
+  width: min(440px, 92vw);
   height: 100vh;
   overflow: auto;
   background: #fff;
@@ -634,4 +634,122 @@ tr.selected,
 .badge.warn {
   background: #f3d9a8;
   color: #6a4b00;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.page-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.section-label {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5a6a7a;
+}
+
+.filter-pop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  background: #fff;
+  border: 1px solid #d8e0e8;
+  border-radius: 0.65rem;
+  padding: 0.85rem 1rem;
+}
+
+.filter-pop label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #5a6a7a;
+  min-width: 10rem;
+}
+
+.lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chip {
+  border: 1px solid #d5dde6;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #1f4b6e;
+  cursor: pointer;
+}
+
+.chip span {
+  margin-left: 0.25rem;
+  color: #6a7a8a;
+}
+
+.chip.active {
+  background: #1f4b6e;
+  border-color: #1f4b6e;
+  color: #fff;
+}
+
+.chip.active span {
+  color: #d5e4f2;
+}
+
+.lead-badges,
+.lead-actions,
+.drawer-tabs {
+  margin-top: 0.45rem;
+}
+
+.more-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+  padding: 0.55rem;
+  background: #f7f9fb;
+  border: 1px solid #e3eaf1;
+  border-radius: 0.45rem;
+}
+
+.wizard-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0.4rem 0 0.8rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: #6a7a8a;
+}
+
+.wizard-steps li.active {
+  color: #1f4b6e;
+  font-weight: 650;
+}
+
+@media (max-width: 720px) {
+  .page-head {
+    align-items: stretch;
+  }
+
+  .drawer-tabs .btn,
+  .lead-actions .btn {
+    flex: 1 1 auto;
+  }
 }

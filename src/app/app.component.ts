@@ -118,13 +118,17 @@ export class AppComponent implements OnInit, OnDestroy {
     companyName: '',
     email: '',
     phone: '',
-    sourceCode: 'WEBSITE',
+    sourceCode: 'CALL',
     campaignId: null as number | null,
     accountId: null as number | null,
     contactId: null as number | null,
     utmSource: '',
     utmMedium: '',
     utmCampaign: '',
+    priority: 'MEDIUM',
+    amount: null as number | null,
+    currency: 'INR',
+    ownerUserId: '',
   };
 
   /** Edit form bound in lead drawer (PUT /leads/{id}). */
@@ -184,6 +188,25 @@ export class AppComponent implements OnInit, OnDestroy {
     markLeadConverted: true,
   };
   lastPartyConvert: Record<string, unknown> | null = null;
+  /** Known lead sources. Free-text names stay text fields; these are controlled codes. */
+  readonly leadSourceOptions: Array<{ code: string; label: string }> = [
+    { code: 'CALL', label: 'Phone call' },
+    { code: 'VISIT', label: 'Market visit' },
+    { code: 'WALKIN', label: 'Walk-in' },
+    { code: 'WEBSITE', label: 'Website' },
+    { code: 'REFERRAL', label: 'Referral' },
+  ];
+  showCreateLead = false;
+  showCreateMore = false;
+  showLeadTools = false;
+  showLeadFilters = false;
+  leadFilterStatus = '';
+  leadFilterSource = '';
+  leadFilterOwner = '';
+  leadFilterStageId: number | null = null;
+  leadDrawerTab: 'overview' | 'convert' | 'activity' | 'shop' | 'more' = 'overview';
+  convertStep = 1;
+  showMoreLeadActions = false;
   duplicateHits: Array<Record<string, unknown>> = [];
   duplicateRules: Array<Record<string, unknown>> = [];
 
@@ -467,9 +490,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private rebuildLeadKanban(): void {
-    this.kanbanColumns = this.stages.map((stage) => ({
+    const stages =
+      this.leadFilterStageId == null
+        ? this.stages
+        : this.stages.filter((stage) => Number(stage.id) === Number(this.leadFilterStageId));
+    this.kanbanColumns = stages.map((stage) => ({
       stage,
-      leads: this.leads.filter((l) => Number(l.stageId) === Number(stage.id)),
+      leads: this.visibleLeads().filter((l) => Number(l.stageId) === Number(stage.id)),
     }));
   }
 
@@ -881,6 +908,10 @@ export class AppComponent implements OnInit, OnDestroy {
         utmSource: this.leadForm.utmSource || null,
         utmMedium: this.leadForm.utmMedium || null,
         utmCampaign: this.leadForm.utmCampaign || null,
+        priority: this.leadForm.priority || null,
+        amount: this.leadForm.amount,
+        currency: this.leadForm.currency || null,
+        ownerUserId: this.leadForm.ownerUserId || null,
       })
       .subscribe({
         next: (lead) => {
@@ -893,13 +924,17 @@ export class AppComponent implements OnInit, OnDestroy {
             companyName: '',
             email: '',
             phone: '',
-            sourceCode: 'WEBSITE',
+            sourceCode: 'CALL',
             campaignId: null,
             accountId: null,
             contactId: null,
             utmSource: '',
             utmMedium: '',
             utmCampaign: '',
+            priority: 'MEDIUM',
+            amount: null,
+            currency: 'INR',
+            ownerUserId: '',
           };
           this.loadLeads();
           this.openLead(lead);
@@ -1326,6 +1361,119 @@ export class AppComponent implements OnInit, OnDestroy {
       });
   }
 
+  visibleLeads(): Lead[] {
+    return this.leads.filter((lead) => this.leadPassesFilters(lead));
+  }
+
+  leadOwnerOptions(): string[] {
+    const owners = new Set<string>();
+    for (const member of this.members) {
+      if (member.userId) {
+        owners.add(member.userId);
+      }
+    }
+    for (const lead of this.leads) {
+      if (lead.ownerUserId) {
+        owners.add(lead.ownerUserId);
+      }
+    }
+    return Array.from(owners).sort();
+  }
+
+  applyLeadFilters(): void {
+    this.rebuildLeadKanban();
+  }
+
+  clearLeadFilters(): void {
+    this.leadFilterStatus = '';
+    this.leadFilterSource = '';
+    this.leadFilterOwner = '';
+    this.leadFilterStageId = null;
+    this.rebuildLeadKanban();
+  }
+
+  toggleStageFilter(stageId: number): void {
+    this.leadFilterStageId = this.leadFilterStageId === stageId ? null : stageId;
+    this.rebuildLeadKanban();
+  }
+
+  stageLeadCount(stageId: number): number {
+    return this.leads.filter((lead) => Number(lead.stageId) === Number(stageId)).length;
+  }
+
+  sourceLabel(code: string | null | undefined): string {
+    const match = this.leadSourceOptions.find((option) => option.code === code);
+    return match?.label || code || '—';
+  }
+
+  isKnownSource(code: string | null | undefined): boolean {
+    return this.leadSourceOptions.some((option) => option.code === code);
+  }
+
+  openConvertWizard(): void {
+    this.leadDrawerTab = 'convert';
+    this.convertStep = 1;
+    this.showMoreLeadActions = false;
+    if (this.selectedLead) {
+      this.resetPartyConvertForm(this.selectedLead);
+    }
+  }
+
+  convertStepBack(): void {
+    this.convertStep = Math.max(1, this.convertStep - 1);
+    this.error = '';
+  }
+
+  convertStepNext(): void {
+    const form = this.partyConvertForm;
+    if (this.convertStep === 1 && form.accountMode === 'EXISTING' && form.accountId == null) {
+      this.error = 'Pick an existing account, or choose Create new.';
+      return;
+    }
+    if (this.convertStep === 2 && form.contactMode === 'EXISTING' && form.contactId == null) {
+      this.error = 'Pick an existing contact, or choose Create new.';
+      return;
+    }
+    this.error = '';
+    this.convertStep = Math.min(4, this.convertStep + 1);
+  }
+
+  convertAccountSummary(): string {
+    const form = this.partyConvertForm;
+    if (form.accountMode === 'EXISTING') {
+      return this.accountName(form.accountId) || 'Existing account';
+    }
+    return form.accountName || this.selectedLead?.companyName || this.selectedLead?.displayName || 'New account';
+  }
+
+  convertContactSummary(): string {
+    const form = this.partyConvertForm;
+    if (form.contactMode === 'NONE') {
+      return 'No contact';
+    }
+    if (form.contactMode === 'EXISTING') {
+      const contact = this.leadContacts.find((row) => row.id === form.contactId);
+      return contact?.displayName || 'Existing contact';
+    }
+    return form.contactName || this.selectedLead?.displayName || 'New contact';
+  }
+
+  private leadPassesFilters(lead: Lead): boolean {
+    if (this.leadFilterStatus && lead.status !== this.leadFilterStatus) {
+      return false;
+    }
+    if (this.leadFilterSource && (lead.sourceCode || '') !== this.leadFilterSource) {
+      return false;
+    }
+    if (this.leadFilterOwner && (lead.ownerUserId || '') !== this.leadFilterOwner) {
+      return false;
+    }
+    if (this.leadFilterStageId != null && Number(lead.stageId) !== Number(this.leadFilterStageId)) {
+      return false;
+    }
+    return true;
+  }
+
   scoreBandClass(band: string | null | undefined): string {
     const b = (band || '').toUpperCase();
     if (b === 'HOT') {
@@ -1596,6 +1744,9 @@ export class AppComponent implements OnInit, OnDestroy {
     };
     this.editingLead = false;
     this.duplicateHits = [];
+    this.leadDrawerTab = 'overview';
+    this.convertStep = 1;
+    this.showMoreLeadActions = false;
     this.syncEditLeadForm(lead);
     this.resetPartyConvertForm(lead);
     this.initQualificationFromLead(lead);
