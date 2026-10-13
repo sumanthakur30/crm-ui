@@ -2168,7 +2168,11 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  weekDays: Array<Record<string, unknown>> = [];
+  weekLabel = '';
+
   loadMyDay(): void {
+    this.loadWeek();
     this.api.myDay().subscribe({
       next: (snap) => {
         this.myDay = snap || null;
@@ -2181,6 +2185,43 @@ export class AppComponent implements OnInit, OnDestroy {
         this.setError(err, 'Failed to load My Day');
       },
     });
+  }
+
+  loadWeek(weekOf?: string): void {
+    this.api.myDayWeek(weekOf).subscribe({
+      next: (week) => {
+        const days = week?.['days'];
+        this.weekDays = Array.isArray(days) ? (days as Array<Record<string, unknown>>) : [];
+        const start = String(week?.['weekStart'] || '');
+        const end = String(week?.['weekEnd'] || '');
+        this.weekLabel = start && end ? `${start} – ${end}` : '';
+      },
+      error: () => {
+        this.weekDays = [];
+        this.weekLabel = '';
+      },
+    });
+  }
+
+  shiftWeek(delta: number): void {
+    const start = String(this.weekDays[0]?.['date'] || '');
+    if (!start) {
+      this.loadWeek();
+      return;
+    }
+    this.loadWeek(this.addIsoDays(start, delta * 7));
+  }
+
+  private addIsoDays(isoDate: string, days: number): string {
+    const [year, month, day] = isoDate.split('-').map((part) => Number(part));
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  dayItems(day: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
+    const rows = day[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
   }
 
   myDayRows(key: string): Array<Record<string, unknown>> {

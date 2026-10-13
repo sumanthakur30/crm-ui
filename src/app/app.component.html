@@ -117,6 +117,24 @@
       <button type="button" class="btn" (click)="processSla()">Process SLA aging</button>
       <span class="muted" *ngIf="myDay as d">{{ d['timezone'] }} · as of {{ $any(d['asOf']) | date: 'short' }}</span>
     </div>
+    <section class="panel">
+      <div class="row between wrap">
+        <h2>Week <span class="muted">{{ weekLabel }}</span></h2>
+        <div class="row wrap">
+          <button type="button" class="btn" (click)="shiftWeek(-1)">Previous</button>
+          <button type="button" class="btn" (click)="loadWeek()">This week</button>
+          <button type="button" class="btn" (click)="shiftWeek(1)">Next</button>
+        </div>
+      </div>
+      <div class="week-grid">
+        <article class="week-day" *ngFor="let day of weekDays">
+          <h3>{{ day['date'] }}</h3>
+          <p *ngFor="let task of dayItems(day, 'tasks')">{{ task['title'] }}</p>
+          <p class="muted" *ngFor="let meeting of dayItems(day, 'meetings')">{{ meeting['title'] }}</p>
+          <p class="muted" *ngIf="!dayItems(day, 'tasks').length && !dayItems(day, 'meetings').length">—</p>
+        </article>
+      </div>
+    </section>
     <div class="grid-3">
       <section class="panel">
         <h2>Overdue <span class="badge warn">{{ myDayCount('overdueTasks') }}</span></h2>

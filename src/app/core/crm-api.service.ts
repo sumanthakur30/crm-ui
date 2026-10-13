@@ -234,6 +234,14 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/my-day`, { params });
   }
 
+  myDayWeek(weekOf?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (weekOf) {
+      params = params.set('weekOf', weekOf);
+    }
+    return this.http.get<Record<string, unknown>>(`${this.base}/my-day/week`, { params });
+  }
+
   listActivities(opts?: {
     from?: string;
     to?: string;

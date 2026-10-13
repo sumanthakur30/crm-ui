@@ -377,8 +377,29 @@ code {
   gap: 1rem;
 }
 
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.week-day {
+  min-height: 6rem;
+}
+
+.week-day h3 {
+  font-size: 0.85rem;
+  margin: 0 0 0.35rem;
+}
+
+.week-day p {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 1000px) {
-  .grid-3 {
+  .grid-3,
+  .week-grid {
     grid-template-columns: 1fr;
   }
   .layout.drawer-open {
