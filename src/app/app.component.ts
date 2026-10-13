@@ -247,7 +247,9 @@ export class AppComponent implements OnInit, OnDestroy {
     currency: 'INR',
     leadId: null as number | null,
     accountId: null as number | null,
+    nextFollowUpDate: '',
   };
+  oppFollowUpDate = '';
 
   quoteForm = {
     opportunityId: null as number | null,
@@ -885,7 +887,11 @@ export class AppComponent implements OnInit, OnDestroy {
         if (this.selectedOpp) {
           const fresh = this.opportunities.find((o) => o.id === this.selectedOpp!.id);
           if (fresh) {
+            const editingSameDate = this.oppFollowUpDate === this.dealFollowUp(this.selectedOpp);
             this.selectedOpp = fresh;
+            if (editingSameDate) {
+              this.oppFollowUpDate = this.dealFollowUp(fresh);
+            }
             this.loadQuotesForOpp(fresh.id);
           }
         }
@@ -1684,13 +1690,25 @@ export class AppComponent implements OnInit, OnDestroy {
         accountId,
         amount: this.oppForm.amount ?? fromLead?.amount ?? null,
         currency: this.oppForm.currency || fromLead?.currency || 'INR',
+        attributes: mergeLeadProfile(null, {
+          ...emptyLeadProfile(),
+          nextFollowUpDate:
+            this.oppForm.nextFollowUpDate || readLeadProfile(fromLead?.attributes).nextFollowUpDate,
+        }),
       })
       .subscribe({
         next: (opp) => {
           this.busy = false;
           this.message = `Opportunity #${opp.id} created`;
           this.error = '';
-          this.oppForm = { name: '', amount: null, currency: 'INR', leadId: null, accountId: null };
+          this.oppForm = {
+            name: '',
+            amount: null,
+            currency: 'INR',
+            leadId: null,
+            accountId: null,
+            nextFollowUpDate: '',
+          };
           this.loadOpportunities();
           this.setModule('deals');
           this.openOpp(opp);
@@ -1880,6 +1898,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   openOpp(opp: Opportunity): void {
     this.selectedOpp = opp;
+    this.oppFollowUpDate = readLeadProfile(opp.attributes).nextFollowUpDate;
     this.selectedLead = null;
     this.selectedQuote = null;
     this.quoteForm.opportunityId = opp.id;
@@ -1888,7 +1907,56 @@ export class AppComponent implements OnInit, OnDestroy {
 
   closeOpp(): void {
     this.selectedOpp = null;
+    this.oppFollowUpDate = '';
     this.quotations = [];
+  }
+
+  dealFollowUp(opp: Opportunity): string {
+    return readLeadProfile(opp.attributes).nextFollowUpDate;
+  }
+
+  oppFollowUpOverdue(opp: Opportunity): boolean {
+    return isFollowUpOverdue(this.dealFollowUp(opp), this.todayIso());
+  }
+
+  saveOppFollowUp(): void {
+    const opp = this.selectedOpp;
+    if (!opp) {
+      return;
+    }
+    const profile = emptyLeadProfile();
+    profile.nextFollowUpDate = this.oppFollowUpDate;
+    this.busy = true;
+    this.api
+      .updateOpportunity(opp.id, {
+        name: opp.name,
+        leadId: opp.leadId,
+        accountId: opp.accountId,
+        pipelineId: opp.pipelineId,
+        stageId: opp.stageId,
+        amount: opp.amount,
+        currency: opp.currency,
+        probability: opp.probability,
+        expectedCloseDate: opp.expectedCloseDate,
+        status: opp.status,
+        ownerUserId: opp.ownerUserId,
+        closeReasonCode: opp.closeReasonCode,
+        closeReasonNote: opp.closeReasonNote,
+        attributes: mergeLeadProfile(opp.attributes, profile),
+      })
+      .subscribe({
+        next: (updated) => {
+          this.busy = false;
+          this.selectedOpp = updated;
+          this.oppFollowUpDate = readLeadProfile(updated.attributes).nextFollowUpDate;
+          this.message = `Follow-up saved for deal #${updated.id}`;
+          this.loadOpportunities();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Save deal follow-up failed');
+        },
+      });
   }
 
   loadQuotesForOpp(opportunityId: number): void {
@@ -2170,9 +2238,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
   weekDays: Array<Record<string, unknown>> = [];
   weekLabel = '';
+  calendarView: 'day' | 'week' | 'month' = 'week';
 
   loadMyDay(): void {
-    this.loadWeek();
+    this.loadCalendar();
     this.api.myDay().subscribe({
       next: (snap) => {
         this.myDay = snap || null;
@@ -2187,14 +2256,14 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadWeek(weekOf?: string): void {
-    this.api.myDayWeek(weekOf).subscribe({
-      next: (week) => {
-        const days = week?.['days'];
+  loadCalendar(anchor?: string): void {
+    this.api.myDayCalendar(this.calendarView, anchor).subscribe({
+      next: (calendar) => {
+        const days = calendar?.['days'];
         this.weekDays = Array.isArray(days) ? (days as Array<Record<string, unknown>>) : [];
-        const start = String(week?.['weekStart'] || '');
-        const end = String(week?.['weekEnd'] || '');
-        this.weekLabel = start && end ? `${start} – ${end}` : '';
+        const start = String(calendar?.['rangeStart'] || '');
+        const end = String(calendar?.['rangeEnd'] || '');
+        this.weekLabel = start && end && start !== end ? `${start} – ${end}` : start;
       },
       error: () => {
         this.weekDays = [];
@@ -2203,19 +2272,44 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  shiftWeek(delta: number): void {
-    const start = String(this.weekDays[0]?.['date'] || '');
-    if (!start) {
-      this.loadWeek();
+  setCalendarView(view: 'day' | 'week' | 'month'): void {
+    this.calendarView = view;
+    const anchor = this.calendarAnchor();
+    this.loadCalendar(anchor || undefined);
+  }
+
+  shiftCalendar(delta: number): void {
+    const anchor = this.calendarAnchor();
+    if (!anchor) {
+      this.loadCalendar();
       return;
     }
-    this.loadWeek(this.addIsoDays(start, delta * 7));
+    if (this.calendarView === 'month') {
+      this.loadCalendar(this.addIsoMonths(anchor, delta));
+      return;
+    }
+    const step = this.calendarView === 'day' ? 1 : 7;
+    this.loadCalendar(this.addIsoDays(anchor, delta * step));
+  }
+
+  private calendarAnchor(): string {
+    const inRange = this.weekDays.find((day) => day['inRange'] !== false);
+    return String(inRange?.['date'] || this.weekDays[0]?.['date'] || '');
   }
 
   private addIsoDays(isoDate: string, days: number): string {
     const [year, month, day] = isoDate.split('-').map((part) => Number(part));
     const date = new Date(Date.UTC(year, month - 1, day));
     date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  private addIsoMonths(isoDate: string, months: number): string {
+    const [year, month, day] = isoDate.split('-').map((part) => Number(part));
+    const date = new Date(Date.UTC(year, month - 1, 1));
+    date.setUTCMonth(date.getUTCMonth() + months);
+    const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+    date.setUTCDate(Math.min(day, lastDay));
     return date.toISOString().slice(0, 10);
   }
 

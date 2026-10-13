@@ -383,6 +383,10 @@ code {
   gap: 0.5rem;
 }
 
+.week-grid.day-grid {
+  grid-template-columns: 1fr;
+}
+
 .week-day {
   min-height: 6rem;
 }

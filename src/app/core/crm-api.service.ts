@@ -136,6 +136,10 @@ export class CrmApiService {
     return this.http.post<Opportunity>(`${this.base}/opportunities`, body);
   }
 
+  updateOpportunity(id: number, body: OpportunityUpsert): Observable<Opportunity> {
+    return this.http.put<Opportunity>(`${this.base}/opportunities/${id}`, body);
+  }
+
   moveOpportunityStage(
     id: number,
     stageId: number,
@@ -240,6 +244,14 @@ export class CrmApiService {
       params = params.set('weekOf', weekOf);
     }
     return this.http.get<Record<string, unknown>>(`${this.base}/my-day/week`, { params });
+  }
+
+  myDayCalendar(view: 'day' | 'week' | 'month', anchor?: string): Observable<Record<string, unknown>> {
+    let params = new HttpParams().set('view', view);
+    if (anchor) {
+      params = params.set('anchor', anchor);
+    }
+    return this.http.get<Record<string, unknown>>(`${this.base}/my-day/calendar`, { params });
   }
 
   listActivities(opts?: {
