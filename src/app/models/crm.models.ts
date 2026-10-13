@@ -41,6 +41,7 @@ export interface Lead {
   status?: string | null;
   priority?: string | null;
   score: number;
+  scoreBand?: string | null;
   ownerUserId?: string | null;
   teamId?: string | null;
   amount?: number | null;
@@ -51,6 +52,7 @@ export interface Lead {
   utmCampaign?: string | null;
   utmContent?: string | null;
   utmTerm?: string | null;
+  attributes?: Record<string, unknown>;
   externalRefs?: Record<string, unknown>;
   accountId?: number | null;
   contactId?: number | null;
@@ -150,6 +152,10 @@ export interface StatusResponse {
   convertEnabled?: boolean;
   ctiEnabled?: boolean;
   inboundSigningEnabled?: boolean;
+  orderEnabled?: boolean;
+  orderProductMapped?: boolean;
+  aiProvider?: string;
+  ctiProvider?: string;
 }
 
 /** Snapshot from GET /api/v1/crm/entitlements — drives tab gating. */
@@ -157,7 +163,11 @@ export interface EntitlementsSnapshot {
   checksEnabled: boolean;
   features: Record<string, boolean>;
   modules: {
+    home?: boolean;
     leads?: boolean;
+    deals?: boolean;
+    accounts?: boolean;
+    insights?: boolean;
     quotes?: boolean;
     campaigns?: boolean;
     ai?: boolean;
@@ -286,6 +296,7 @@ export interface QuoteLine {
   unitPrice: number;
   gstRate: number;
   discount?: number | null;
+  productId?: number | null;
 }
 
 export interface QuotationUpsert {

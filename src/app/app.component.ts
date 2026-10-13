@@ -1,7 +1,17 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { CrmApiService } from './core/crm-api.service';
+import {
+  emptyLeadProfile,
+  isFollowUpOverdue,
+  LeadProfileFields,
+  mergeLeadProfile,
+  readLeadProfile,
+} from './core/lead-profile';
 import { TenantService } from './core/tenant.service';
 import { AuthSessionService } from './core/auth-session.service';
+import { CrmModuleId, CrmNavService } from './core/crm-nav.service';
 import {
   Campaign,
   CloseReason,
@@ -40,18 +50,10 @@ export interface DealKanbanColumn {
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   title = 'SugamFlow CRM';
-  module:
-    | 'leads'
-    | 'deals'
-    | 'quotes'
-    | 'insights'
-    | 'campaigns'
-    | 'accounts'
-    | 'ops'
-    | 'cases'
-    | 'enterprise' = 'leads';
+  module: CrmModuleId = 'home';
+  private navSub: Subscription | null = null;
   view: 'list' | 'kanban' = 'kanban';
   /** Cached for template — getters that allocate each CD cycle freeze Chrome ("Page Unresponsive"). */
   kanbanColumns: LeadKanbanColumn[] = [];
@@ -70,8 +72,8 @@ export class AppComponent implements OnInit {
   searchQ = '';
   authTokenDraft = '';
   authUserDraft = '';
-  loginShopId = '';
-  loginUsername = '';
+  loginShopId = 'CRM-DEMO-01';
+  loginUsername = 'demo';
   loginPassword = '';
   showLogin = false;
 
@@ -96,6 +98,12 @@ export class AppComponent implements OnInit {
   selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
   noteDraft = '';
+  messageForm = {
+    channel: 'WHATSAPP' as 'WHATSAPP' | 'SMS' | 'EMAIL',
+    recipient: '',
+    subject: '',
+    body: '',
+  };
   assignMode: 'ROUND_ROBIN' | 'MANUAL' = 'ROUND_ROBIN';
   manualOwner = '';
 
@@ -117,14 +125,33 @@ export class AppComponent implements OnInit {
     companyName: '',
     email: '',
     phone: '',
-    sourceCode: 'WEBSITE',
+    sourceCode: 'CALL',
     campaignId: null as number | null,
     accountId: null as number | null,
     contactId: null as number | null,
     utmSource: '',
     utmMedium: '',
     utmCampaign: '',
+    priority: 'MEDIUM',
+    amount: null as number | null,
+    currency: 'INR',
+    ownerUserId: '',
+    profile: emptyLeadProfile(),
   };
+
+  /** Edit form bound in lead drawer (PUT /leads/{id}). */
+  editLeadForm = {
+    title: '',
+    displayName: '',
+    companyName: '',
+    email: '',
+    phone: '',
+    sourceCode: '',
+    priority: 'MEDIUM',
+    status: 'OPEN',
+    profile: emptyLeadProfile(),
+  };
+  editingLead = false;
 
   accountForm = {
     name: '',
@@ -141,6 +168,61 @@ export class AppComponent implements OnInit {
     phone: '',
     title: '',
   };
+
+  /** Sprint 2 — account 360 drawer */
+  accountTab: 'overview' | 'timeline' | 'erp' = 'overview';
+  accountSummary: Record<string, unknown> | null = null;
+  accountTimeline: TimelineItem[] = [];
+  accountNoteDraft = '';
+  orderEnabled = false;
+  orderProductMapped = false;
+
+  /** Sprint 2 — lead → CRM party convert wizard */
+  partyConvertForm = {
+    accountMode: 'CREATE' as 'CREATE' | 'EXISTING',
+    accountId: null as number | null,
+    accountName: '',
+    accountGstin: '',
+    accountPhone: '',
+    accountEmail: '',
+    contactMode: 'CREATE' as 'CREATE' | 'EXISTING' | 'NONE',
+    contactId: null as number | null,
+    contactName: '',
+    contactEmail: '',
+    contactPhone: '',
+    contactTitle: '',
+    createOpportunity: true,
+    oppName: '',
+    oppAmount: null as number | null,
+    markLeadConverted: true,
+  };
+  lastPartyConvert: Record<string, unknown> | null = null;
+  /** Known lead sources. Free-text names stay text fields; these are controlled codes. */
+  readonly leadSourceOptions: Array<{ code: string; label: string }> = [
+    { code: 'CALL', label: 'Phone call' },
+    { code: 'VISIT', label: 'Market visit' },
+    { code: 'WALKIN', label: 'Walk-in' },
+    { code: 'WEBSITE', label: 'Website' },
+    { code: 'REFERRAL', label: 'Referral' },
+    { code: 'WHATSAPP', label: 'WhatsApp' },
+    { code: 'CAMPAIGN', label: 'Campaign' },
+    { code: 'AD', label: 'Advertisement' },
+    { code: 'MARKETPLACE', label: 'Marketplace' },
+    { code: 'MANUAL', label: 'Manual entry' },
+  ];
+  showCreateLead = false;
+  showCreateMore = false;
+  showLeadTools = false;
+  showLeadFilters = false;
+  leadFilterStatus = '';
+  leadFilterSource = '';
+  leadFilterOwner = '';
+  leadFilterStageId: number | null = null;
+  leadDrawerTab: 'overview' | 'convert' | 'activity' | 'shop' | 'more' = 'overview';
+  convertStep = 1;
+  showMoreLeadActions = false;
+  duplicateHits: Array<Record<string, unknown>> = [];
+  duplicateRules: Array<Record<string, unknown>> = [];
 
   campaignForm = {
     code: '',
@@ -181,6 +263,7 @@ export class AppComponent implements OnInit {
     qty: 1,
     unitPrice: 10000,
     gstRate: 18,
+    productId: null as number | null,
   };
 
   sendForm = {
@@ -224,19 +307,27 @@ export class AppComponent implements OnInit {
   offlineReady = typeof navigator !== 'undefined' ? navigator.onLine : true;
   installPromptEvent: any = null;
   analytics: Record<string, unknown> | null = null;
+  dashboardScope = '';
+  dashboardRolePack: string[] = [];
   dashboardKpis = {
     openDeals: 0,
     wonDeals: 0,
     lostDeals: 0,
     overdueTasks: 0,
     pipelineAmount: 0,
+    openLeads: 0,
+    hotLeads: 0,
   };
+  reportSchedules: Array<Record<string, unknown>> = [];
+  lastReportResult: Record<string, unknown> | null = null;
   leadFunnel: Array<Record<string, unknown>> = [];
   leadSources: Array<Record<string, unknown>> = [];
   campaignStats: Array<Record<string, unknown>> = [];
   utmSources: Array<Record<string, unknown>> = [];
   dealFunnel: Array<Record<string, unknown>> = [];
   openTasks: Array<Record<string, unknown>> = [];
+  myDay: Record<string, unknown> | null = null;
+  myDayActivities: Array<Record<string, unknown>> = [];
   forecast: Record<string, unknown> | null = null;
   forecastCommitForm = { periodYm: '', amount: 0, note: '' };
 
@@ -248,13 +339,22 @@ export class AppComponent implements OnInit {
   fieldAcl: Array<Record<string, unknown>> = [];
   adapterEvents: Array<Record<string, unknown>> = [];
   scoreRules: Array<Record<string, unknown>> = [];
+  scoreBands: Record<string, unknown> | null = null;
+  scoreBandForm = { hotMin: 70, warmMin: 40 };
+  scoreRuleDraft = { code: '', name: '', eventType: '', points: 5 };
+  qualificationSchemas: Array<Record<string, unknown>> = [];
+  qualificationAnswers: Record<string, string> = {};
+  qualificationSchemaCode = 'BANT';
   stageAutomationRules: Array<Record<string, unknown>> = [];
   stageRuleForm = {
     objectType: 'OPPORTUNITY' as 'LEAD' | 'OPPORTUNITY',
     toStageCode: 'NEGOTIATION',
-    actionType: 'CREATE_TASK' as 'CREATE_TASK' | 'TIMELINE_NOTE',
+    actionType: 'CREATE_TASK' as 'CREATE_TASK' | 'TIMELINE_NOTE' | 'ENROLL_SEQUENCE',
     title: 'Follow up after stage move',
+    sequenceId: null as number | null,
   };
+  pipelineAnalytics: Record<string, unknown> | null = null;
+  sequenceEnrollments: Array<Record<string, unknown>> = [];
   callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
   meetingTitle = 'Discovery call';
   adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
@@ -277,6 +377,9 @@ export class AppComponent implements OnInit {
   ssoAuthorizeUrl = '';
   meters: Record<string, unknown> | null = null;
   seatsDraft = 0;
+  aiStatusInfo: Record<string, unknown> | null = null;
+  aiProviderLabel = '';
+  territories: Array<Record<string, unknown>> = [];
   auditExports: Array<Record<string, unknown>> = [];
   aiInsights: Array<Record<string, unknown>> = [];
   lastInsight: Record<string, unknown> | null = null;
@@ -308,7 +411,9 @@ export class AppComponent implements OnInit {
   constructor(
     private readonly api: CrmApiService,
     readonly tenant: TenantService,
-    readonly auth: AuthSessionService
+    readonly auth: AuthSessionService,
+    private readonly router: Router,
+    private readonly nav: CrmNavService
   ) {
     this.tenantDraft = tenant.tenantId;
     this.shopDraft = tenant.shopId;
@@ -318,17 +423,32 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.refreshStatus();
-    this.loadEntitlements();
+    this.navSub = this.nav.module$.subscribe((m) => {
+      if (this.module !== m) {
+        this.applyModule(m, false);
+      } else {
+        this.module = m;
+      }
+    });
     this.loadTemplates();
-    this.reloadAll();
     this.loadFfEmbedConfig();
+    if (this.auth.getAccessToken()) {
+      this.refreshStatus();
+      this.reloadAll();
+    } else {
+      this.showLogin = true;
+      this.message = 'Sign in required — use Auth login (gateway rejects CRM APIs without JWT)';
+    }
     window.addEventListener('online', () => (this.offlineReady = true));
     window.addEventListener('offline', () => (this.offlineReady = false));
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.installPromptEvent = e;
     });
+  }
+
+  ngOnDestroy(): void {
+    this.navSub?.unsubscribe();
   }
 
   promptInstall(): void {
@@ -373,8 +493,8 @@ export class AppComponent implements OnInit {
     this.api.entitlements().subscribe({
       next: (snap) => {
         this.entitlements = snap;
-        if (snap.checksEnabled && this.module !== 'leads' && !this.can(this.module as keyof NonNullable<EntitlementsSnapshot['modules']>)) {
-          this.module = 'leads';
+        if (snap.checksEnabled && this.module !== 'home' && this.module !== 'leads' && !this.can(this.module as keyof NonNullable<EntitlementsSnapshot['modules']>)) {
+          this.module = 'home';
         }
       },
       error: () => {
@@ -384,9 +504,13 @@ export class AppComponent implements OnInit {
   }
 
   private rebuildLeadKanban(): void {
-    this.kanbanColumns = this.stages.map((stage) => ({
+    const stages =
+      this.leadFilterStageId == null
+        ? this.stages
+        : this.stages.filter((stage) => Number(stage.id) === Number(this.leadFilterStageId));
+    this.kanbanColumns = stages.map((stage) => ({
       stage,
-      leads: this.leads.filter((l) => Number(l.stageId) === Number(stage.id)),
+      leads: this.visibleLeads().filter((l) => Number(l.stageId) === Number(stage.id)),
     }));
   }
 
@@ -413,18 +537,7 @@ export class AppComponent implements OnInit {
     return opp.id;
   }
 
-  setModule(
-    m:
-      | 'leads'
-      | 'deals'
-      | 'quotes'
-      | 'insights'
-      | 'campaigns'
-      | 'accounts'
-      | 'ops'
-      | 'cases'
-      | 'enterprise'
-  ): void {
+  setModule(m: CrmModuleId): void {
     const gateKey =
       m === 'quotes'
         ? 'quotes'
@@ -441,32 +554,67 @@ export class AppComponent implements OnInit {
       this.error = this.upgradeHint(m);
       return;
     }
+    void this.router.navigate(['/', m]);
+    this.applyModule(m, true);
+  }
+
+  private applyModule(m: CrmModuleId, fromClick: boolean): void {
+    const gateKey =
+      m === 'quotes'
+        ? 'quotes'
+        : m === 'campaigns'
+          ? 'campaigns'
+          : m === 'enterprise'
+            ? 'ai'
+            : m === 'ops'
+              ? 'ops'
+              : m === 'cases'
+                ? 'cases'
+                : null;
+    if (gateKey && !this.can(gateKey)) {
+      if (!fromClick) {
+        void this.router.navigate(['/home']);
+      }
+      this.error = this.upgradeHint(m);
+      return;
+    }
     this.module = m;
+    this.nav.setModule(m);
     this.error = '';
+    if (m !== 'accounts') {
+      this.closeAccount();
+    }
     if (m !== 'enterprise') {
       this.selectedLead = null;
       this.selectedOpp = null;
       this.selectedQuote = null;
     }
-    if (m === 'deals') {
+    if (m === 'home') {
+      this.loadMyDay();
+    } else if (m === 'deals') {
       this.loadOpportunities();
     } else if (m === 'quotes') {
       this.loadOpportunities();
     } else if (m === 'insights') {
       this.loadInsights();
-    } else if (m === 'campaigns') {
-      this.loadCampaigns();
     } else if (m === 'accounts') {
       this.loadAccounts();
+    } else if (m === 'campaigns') {
+      this.loadCampaigns();
     } else if (m === 'ops') {
       this.loadOps();
     } else if (m === 'cases') {
       this.loadCases();
     } else if (m === 'enterprise') {
       this.loadEnterprise();
+      this.loadDuplicateRules();
+      this.loadAiStatus();
+      this.loadTerritories();
       if (this.selectedLead) {
         this.loadLeadInsights();
       }
+    } else if (m === 'leads') {
+      this.loadLeads();
     }
   }
 
@@ -483,7 +631,12 @@ export class AppComponent implements OnInit {
     this.selectedLead = null;
     this.selectedOpp = null;
     this.selectedQuote = null;
-    this.reloadAll();
+    if (this.auth.getAccessToken()) {
+      this.reloadAll();
+    } else {
+      this.showLogin = true;
+      this.error = 'Sign in required before loading CRM data (HTTP 401 without Bearer token)';
+    }
   }
 
   saveAuth(): void {
@@ -509,17 +662,23 @@ export class AppComponent implements OnInit {
           this.error = 'MFA required — complete MFA in shop UI, then paste token here';
           return;
         }
-        this.authTokenDraft = res.accessToken || '';
+        // Ensure token is persisted before any CRM reload (interceptor reads localStorage).
+        if (res.accessToken) {
+          this.auth.setAccessToken(res.accessToken);
+        }
+        this.authTokenDraft = this.auth.getAccessToken() || '';
         this.authUserDraft = res.username || this.loginUsername;
         this.hasAuthToken = !!this.authTokenDraft;
-        if (res.shopId) {
-          this.tenantDraft = String(res.shopId);
-          this.saveTenant();
-        }
+        const shop = String(res.shopId || this.loginShopId).trim();
+        this.tenantDraft = shop;
+        this.shopDraft = shop;
+        this.tenant.setTenantId(shop);
+        this.tenant.setShopId(shop);
         this.loginPassword = '';
         this.showLogin = false;
         this.message = `Logged in as ${res.username} (${res.role})`;
         this.error = '';
+        this.reloadAll();
         this.refreshStatus();
       },
       error: (err) => {
@@ -543,14 +702,37 @@ export class AppComponent implements OnInit {
         this.convertEnabled = !!s.convertEnabled;
         this.ctiEnabled = !!s.ctiEnabled;
         this.inboundSigningEnabled = !!s.inboundSigningEnabled;
+        this.orderEnabled = !!s.orderEnabled;
+        this.orderProductMapped = !!s.orderProductMapped;
+        this.aiProviderLabel = s.aiProvider || '';
         this.message =
           `${s.service} phase ${s.phase}` +
           (s.convertEnabled ? ' · convert on' : ' · convert off') +
+          (s.orderEnabled ? ' · order on' : ' · order off') +
           (s.ctiEnabled ? ' · CTI on' : ' · CTI off') +
+          (s.aiProvider ? ` · AI ${s.aiProvider}` : '') +
           (s.inboundSigningEnabled ? ' · inbound signing on' : ' · inbound signing off');
         this.error = '';
       },
       error: (err) => this.setError(err, 'Status check failed — is crm-service on :8095?'),
+    });
+  }
+
+  loadAiStatus(): void {
+    if (!this.can('ai')) {
+      this.aiStatusInfo = null;
+      return;
+    }
+    this.api.aiStatus().subscribe({
+      next: (s) => (this.aiStatusInfo = s || null),
+      error: () => (this.aiStatusInfo = null),
+    });
+  }
+
+  loadTerritories(): void {
+    this.api.listTerritories().subscribe({
+      next: (rows) => (this.territories = rows || []),
+      error: () => (this.territories = []),
     });
   }
 
@@ -568,6 +750,13 @@ export class AppComponent implements OnInit {
   }
 
   reloadAll(): void {
+    if (!this.auth.getAccessToken()) {
+      this.hasAuthToken = false;
+      this.showLogin = true;
+      this.error = 'Sign in required — CRM APIs need a Bearer JWT (Auth login)';
+      return;
+    }
+    this.hasAuthToken = true;
     this.loadEntitlements();
     this.loadLeads();
     this.loadMembers();
@@ -666,6 +855,11 @@ export class AppComponent implements OnInit {
   }
 
   loadLeads(): void {
+    if (!this.auth.getAccessToken()) {
+      this.setError({ status: 401, message: 'Sign in required' }, 'Sign in required before loading leads');
+      this.showLogin = true;
+      return;
+    }
     this.api.listLeads(this.searchQ).subscribe({
       next: (page) => {
         this.leads = page.content || [];
@@ -728,6 +922,11 @@ export class AppComponent implements OnInit {
         utmSource: this.leadForm.utmSource || null,
         utmMedium: this.leadForm.utmMedium || null,
         utmCampaign: this.leadForm.utmCampaign || null,
+        priority: this.leadForm.priority || null,
+        amount: this.leadForm.amount,
+        currency: this.leadForm.currency || null,
+        ownerUserId: this.leadForm.ownerUserId || null,
+        attributes: mergeLeadProfile(null, this.leadForm.profile),
       })
       .subscribe({
         next: (lead) => {
@@ -740,13 +939,18 @@ export class AppComponent implements OnInit {
             companyName: '',
             email: '',
             phone: '',
-            sourceCode: 'WEBSITE',
+            sourceCode: 'CALL',
             campaignId: null,
             accountId: null,
             contactId: null,
             utmSource: '',
             utmMedium: '',
             utmCampaign: '',
+            priority: 'MEDIUM',
+            amount: null,
+            currency: 'INR',
+            ownerUserId: '',
+            profile: emptyLeadProfile(),
           };
           this.loadLeads();
           this.openLead(lead);
@@ -794,7 +998,71 @@ export class AppComponent implements OnInit {
 
   selectAccount(account: CrmAccount): void {
     this.selectedAccount = account;
+    this.accountTab = 'overview';
+    this.accountNoteDraft = '';
     this.loadContactsForAccount(account.id);
+    this.loadAccountDetail(account.id);
+  }
+
+  closeAccount(): void {
+    this.selectedAccount = null;
+    this.accountSummary = null;
+    this.accountTimeline = [];
+    this.accountNoteDraft = '';
+    this.contacts = [];
+  }
+
+  loadAccountDetail(accountId: number): void {
+    this.api.getAccountSummary(accountId).subscribe({
+      next: (s) => (this.accountSummary = s || null),
+      error: (err) => {
+        this.accountSummary = null;
+        this.setError(err, 'Failed to load account summary');
+      },
+    });
+    this.loadAccountTimeline(accountId);
+  }
+
+  loadAccountTimeline(accountId: number): void {
+    this.api.accountTimeline(accountId).subscribe({
+      next: (items) => (this.accountTimeline = items || []),
+      error: () => (this.accountTimeline = []),
+    });
+  }
+
+  addAccountNote(): void {
+    if (!this.selectedAccount || !this.accountNoteDraft.trim()) {
+      return;
+    }
+    this.busy = true;
+    this.api.addAccountNote(this.selectedAccount.id, this.accountNoteDraft.trim()).subscribe({
+      next: () => {
+        this.busy = false;
+        this.accountNoteDraft = '';
+        this.message = 'Account note added';
+        this.loadAccountTimeline(this.selectedAccount!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Failed to add account note');
+      },
+    });
+  }
+
+  accountSummaryRows(key: 'leads' | 'opportunities' | 'contacts'): Array<Record<string, unknown>> {
+    const rows = this.accountSummary?.[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
+
+  accountErp(): Record<string, unknown> | null {
+    const erp = this.accountSummary?.['erp'];
+    return erp && typeof erp === 'object' ? (erp as Record<string, unknown>) : null;
+  }
+
+  accountErpRows(key: 'orders' | 'invoices' | 'payments'): Array<Record<string, unknown>> {
+    const erp = this.accountErp();
+    const rows = erp?.[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
   }
 
   loadContactsForAccount(accountId: number): void {
@@ -803,6 +1071,532 @@ export class AppComponent implements OnInit {
       error: (err) => {
         this.contacts = [];
         this.setError(err, 'Failed to load contacts');
+      },
+    });
+  }
+
+  onPartyAccountModeChange(): void {
+    if (this.partyConvertForm.accountMode === 'EXISTING' && !this.accounts.length) {
+      this.loadAccounts();
+    }
+  }
+
+  onPartyAccountPicked(): void {
+    const id = this.partyConvertForm.accountId;
+    if (id == null) {
+      return;
+    }
+    this.api.listContacts(id).subscribe({
+      next: (list) => (this.leadContacts = list || []),
+      error: () => (this.leadContacts = []),
+    });
+  }
+
+  resetPartyConvertForm(lead?: Lead | null): void {
+    const src = lead || this.selectedLead;
+    this.partyConvertForm = {
+      accountMode: src?.accountId ? 'EXISTING' : 'CREATE',
+      accountId: src?.accountId ?? null,
+      accountName: src?.companyName || src?.displayName || '',
+      accountGstin: '',
+      accountPhone: src?.phone || '',
+      accountEmail: src?.email || '',
+      contactMode: src?.contactId ? 'EXISTING' : 'CREATE',
+      contactId: src?.contactId ?? null,
+      contactName: src?.displayName || '',
+      contactEmail: src?.email || '',
+      contactPhone: src?.phone || '',
+      contactTitle: '',
+      createOpportunity: true,
+      oppName: src?.title ? `Deal · ${src.title}` : '',
+      oppAmount: null,
+      markLeadConverted: true,
+    };
+    this.lastPartyConvert = null;
+    if (this.partyConvertForm.accountId) {
+      this.onPartyAccountPicked();
+    }
+  }
+
+  convertLeadToCrmParty(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const f = this.partyConvertForm;
+    if (f.accountMode === 'EXISTING' && f.accountId == null) {
+      this.error = 'Pick an existing account';
+      return;
+    }
+    if (f.contactMode === 'EXISTING' && f.contactId == null) {
+      this.error = 'Pick an existing contact';
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .convertLeadToCrm(this.selectedLead.id, {
+        accountMode: f.accountMode,
+        accountId: f.accountMode === 'EXISTING' ? f.accountId : null,
+        account:
+          f.accountMode === 'CREATE'
+            ? {
+                name: f.accountName || undefined,
+                gstin: f.accountGstin || undefined,
+                phone: f.accountPhone || undefined,
+                email: f.accountEmail || undefined,
+              }
+            : null,
+        contactMode: f.contactMode,
+        contactId: f.contactMode === 'EXISTING' ? f.contactId : null,
+        contact:
+          f.contactMode === 'CREATE'
+            ? {
+                displayName: f.contactName || undefined,
+                email: f.contactEmail || undefined,
+                phone: f.contactPhone || undefined,
+                title: f.contactTitle || undefined,
+              }
+            : null,
+        createOpportunity: f.createOpportunity,
+        opportunity: f.createOpportunity
+          ? { name: f.oppName || undefined, amount: f.oppAmount, currency: 'INR' }
+          : null,
+        markLeadConverted: f.markLeadConverted,
+      })
+      .subscribe({
+        next: (res) => {
+          this.busy = false;
+          this.lastPartyConvert = res;
+          const acct = res['accountId'] != null ? `#${res['accountId']}` : '—';
+          const opp = res['opportunityId'] != null ? ` · opp #${res['opportunityId']}` : '';
+          this.message = `CRM convert ${res['status'] || 'OK'} · account ${acct}${opp}`;
+          this.loadLeads();
+          this.loadAccounts();
+          if (this.selectedLead) {
+            this.loadTimeline(this.selectedLead.id);
+          }
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'CRM party convert failed');
+        },
+      });
+  }
+
+  loadDuplicateRules(): void {
+    this.api.listDuplicateRules('LEAD').subscribe({
+      next: (rows) => (this.duplicateRules = rows || []),
+      error: () => (this.duplicateRules = []),
+    });
+  }
+
+  toggleDuplicateRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertDuplicateRule({
+        id,
+        code: rule['code'],
+        objectType: rule['objectType'] || 'LEAD',
+        matchField: rule['matchField'],
+        normalizeMode: rule['normalizeMode'],
+        enabled: !rule['enabled'],
+        weight: rule['weight'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Duplicate rule ${rule['code']} ${rule['enabled'] ? 'disabled' : 'enabled'}`;
+          this.loadDuplicateRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update duplicate rule failed');
+        },
+      });
+  }
+
+  loadScoreBands(): void {
+    this.api.getScoreBands().subscribe({
+      next: (b) => {
+        this.scoreBands = b || null;
+        this.scoreBandForm = {
+          hotMin: Number(b?.['hotMin'] ?? 70),
+          warmMin: Number(b?.['warmMin'] ?? 40),
+        };
+      },
+      error: () => (this.scoreBands = null),
+    });
+  }
+
+  saveScoreBands(): void {
+    this.busy = true;
+    this.api.updateScoreBands(this.scoreBandForm).subscribe({
+      next: (b) => {
+        this.busy = false;
+        this.scoreBands = b;
+        this.message = `Score bands: Hot ≥ ${b['hotMin']}, Warm ≥ ${b['warmMin']}`;
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Save score bands failed');
+      },
+    });
+  }
+
+  reloadScoreRules(): void {
+    this.api.ensureScoreRules().subscribe({
+      next: (r) => (this.scoreRules = r || []),
+      error: () => (this.scoreRules = []),
+    });
+  }
+
+  saveScoreRulePoints(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        id,
+        code: rule['code'],
+        name: rule['name'],
+        eventType: rule['eventType'],
+        points: Number(rule['points'] ?? 0),
+        active: rule['active'] !== false,
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${rule['code']} saved`;
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update score rule failed');
+        },
+      });
+  }
+
+  toggleScoreRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        id,
+        code: rule['code'],
+        name: rule['name'],
+        eventType: rule['eventType'],
+        points: Number(rule['points'] ?? 0),
+        active: !rule['active'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${rule['code']} ${rule['active'] ? 'disabled' : 'enabled'}`;
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Toggle score rule failed');
+        },
+      });
+  }
+
+  createScoreRule(): void {
+    const code = (this.scoreRuleDraft.code || '').trim().toUpperCase();
+    const eventType = (this.scoreRuleDraft.eventType || '').trim().toUpperCase();
+    if (!code || !eventType) {
+      this.error = 'Score rule code and event type required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertScoreRule({
+        code,
+        name: this.scoreRuleDraft.name || code,
+        eventType,
+        points: Number(this.scoreRuleDraft.points) || 0,
+        active: true,
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Score rule ${code} created`;
+          this.scoreRuleDraft = { code: '', name: '', eventType: '', points: 5 };
+          this.reloadScoreRules();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Create score rule failed');
+        },
+      });
+  }
+
+  loadQualificationSchemas(): void {
+    this.api.listQualificationSchemas().subscribe({
+      next: (rows) => (this.qualificationSchemas = rows || []),
+      error: () => (this.qualificationSchemas = []),
+    });
+  }
+
+  toggleQualificationSchema(schema: Record<string, unknown>): void {
+    const id = Number(schema['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .upsertQualificationSchema({
+        id,
+        code: schema['code'],
+        name: schema['name'],
+        active: !schema['active'],
+        fields: schema['fields'],
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = `Schema ${schema['code']} ${schema['active'] ? 'disabled' : 'enabled'}`;
+          this.loadQualificationSchemas();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update qualification schema failed');
+        },
+      });
+  }
+
+  visibleLeads(): Lead[] {
+    return this.leads.filter((lead) => this.leadPassesFilters(lead));
+  }
+
+  leadOwnerOptions(): string[] {
+    const owners = new Set<string>();
+    for (const member of this.members) {
+      if (member.userId) {
+        owners.add(member.userId);
+      }
+    }
+    for (const lead of this.leads) {
+      if (lead.ownerUserId) {
+        owners.add(lead.ownerUserId);
+      }
+    }
+    return Array.from(owners).sort();
+  }
+
+  applyLeadFilters(): void {
+    this.rebuildLeadKanban();
+  }
+
+  clearLeadFilters(): void {
+    this.leadFilterStatus = '';
+    this.leadFilterSource = '';
+    this.leadFilterOwner = '';
+    this.leadFilterStageId = null;
+    this.rebuildLeadKanban();
+  }
+
+  toggleStageFilter(stageId: number): void {
+    this.leadFilterStageId = this.leadFilterStageId === stageId ? null : stageId;
+    this.rebuildLeadKanban();
+  }
+
+  stageLeadCount(stageId: number): number {
+    return this.leads.filter((lead) => Number(lead.stageId) === Number(stageId)).length;
+  }
+
+  sourceLabel(code: string | null | undefined): string {
+    const match = this.leadSourceOptions.find((option) => option.code === code);
+    return match?.label || code || '—';
+  }
+
+  isKnownSource(code: string | null | undefined): boolean {
+    return this.leadSourceOptions.some((option) => option.code === code);
+  }
+
+  openConvertWizard(): void {
+    this.leadDrawerTab = 'convert';
+    this.convertStep = 1;
+    this.showMoreLeadActions = false;
+    if (this.selectedLead) {
+      this.resetPartyConvertForm(this.selectedLead);
+    }
+  }
+
+  convertStepBack(): void {
+    this.convertStep = Math.max(1, this.convertStep - 1);
+    this.error = '';
+  }
+
+  convertStepNext(): void {
+    const form = this.partyConvertForm;
+    if (this.convertStep === 1 && form.accountMode === 'EXISTING' && form.accountId == null) {
+      this.error = 'Pick an existing account, or choose Create new.';
+      return;
+    }
+    if (this.convertStep === 2 && form.contactMode === 'EXISTING' && form.contactId == null) {
+      this.error = 'Pick an existing contact, or choose Create new.';
+      return;
+    }
+    this.error = '';
+    this.convertStep = Math.min(4, this.convertStep + 1);
+  }
+
+  convertAccountSummary(): string {
+    const form = this.partyConvertForm;
+    if (form.accountMode === 'EXISTING') {
+      return this.accountName(form.accountId) || 'Existing account';
+    }
+    return form.accountName || this.selectedLead?.companyName || this.selectedLead?.displayName || 'New account';
+  }
+
+  convertContactSummary(): string {
+    const form = this.partyConvertForm;
+    if (form.contactMode === 'NONE') {
+      return 'No contact';
+    }
+    if (form.contactMode === 'EXISTING') {
+      const contact = this.leadContacts.find((row) => row.id === form.contactId);
+      return contact?.displayName || 'Existing contact';
+    }
+    return form.contactName || this.selectedLead?.displayName || 'New contact';
+  }
+
+  private leadPassesFilters(lead: Lead): boolean {
+    if (this.leadFilterStatus && lead.status !== this.leadFilterStatus) {
+      return false;
+    }
+    if (this.leadFilterSource && (lead.sourceCode || '') !== this.leadFilterSource) {
+      return false;
+    }
+    if (this.leadFilterOwner && (lead.ownerUserId || '') !== this.leadFilterOwner) {
+      return false;
+    }
+    if (this.leadFilterStageId != null && Number(lead.stageId) !== Number(this.leadFilterStageId)) {
+      return false;
+    }
+    return true;
+  }
+
+  leadProfile(lead: Lead): LeadProfileFields {
+    return readLeadProfile(lead.attributes);
+  }
+
+  followUpOverdue(lead: Lead): boolean {
+    return isFollowUpOverdue(this.leadProfile(lead).nextFollowUpDate, this.todayIso());
+  }
+
+  private todayIso(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+
+  scoreBandClass(band: string | null | undefined): string {
+    const b = (band || '').toUpperCase();
+    if (b === 'HOT') {
+      return 'badge band-hot';
+    }
+    if (b === 'WARM') {
+      return 'badge band-warm';
+    }
+    if (b === 'COLD') {
+      return 'badge band-cold';
+    }
+    return 'badge';
+  }
+
+  activeQualificationFields(): Array<Record<string, unknown>> {
+    const schema =
+      this.qualificationSchemas.find((s) => s['code'] === this.qualificationSchemaCode) ||
+      this.qualificationSchemas[0];
+    const fields = schema?.['fields'];
+    return Array.isArray(fields) ? (fields as Array<Record<string, unknown>>) : [];
+  }
+
+  initQualificationFromLead(lead: Lead | null): void {
+    this.qualificationAnswers = {};
+    if (!lead) {
+      return;
+    }
+    const qual = lead.attributes?.['qualification'];
+    if (qual && typeof qual === 'object') {
+      const q = qual as Record<string, unknown>;
+      if (typeof q['schemaCode'] === 'string' && q['schemaCode']) {
+        this.qualificationSchemaCode = String(q['schemaCode']);
+      }
+      const answers = q['answers'];
+      if (answers && typeof answers === 'object') {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(answers as Record<string, unknown>)) {
+          out[k] = v == null ? '' : String(v);
+        }
+        this.qualificationAnswers = out;
+      }
+    }
+  }
+
+  saveLeadQualification(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    const answers: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.qualificationAnswers)) {
+      answers[k] = v;
+    }
+    this.busy = true;
+    this.api
+      .saveLeadQualification(this.selectedLead.id, {
+        schemaCode: this.qualificationSchemaCode || 'BANT',
+        answers,
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.selectedLead = lead;
+          this.initQualificationFromLead(lead);
+          this.message = 'Qualification saved';
+          this.loadTimeline(lead.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Save qualification failed');
+        },
+      });
+  }
+
+  mergeDuplicateIntoSelected(dupId: number): void {
+    if (!this.selectedLead || !dupId) {
+      return;
+    }
+    if (!confirm(`Merge duplicate #${dupId} into #${this.selectedLead.id}?`)) {
+      return;
+    }
+    this.busy = true;
+    this.api.mergeLeads(this.selectedLead.id, dupId).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Merged #${dupId} into #${this.selectedLead!.id}`;
+        this.duplicateHits = [];
+        this.loadLeads();
+        this.loadTimeline(this.selectedLead!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Merge failed');
       },
     });
   }
@@ -944,6 +1738,7 @@ export class AppComponent implements OnInit {
             qty: Number(this.quoteForm.qty) || 1,
             unitPrice: Number(this.quoteForm.unitPrice) || 0,
             gstRate: Number(this.quoteForm.gstRate) || 0,
+            productId: this.quoteForm.productId != null ? Number(this.quoteForm.productId) : null,
           },
         ],
       })
@@ -972,18 +1767,110 @@ export class AppComponent implements OnInit {
     this.selectedOpp = null;
     this.selectedQuote = null;
     this.noteDraft = '';
+    this.messageForm = {
+      channel: 'WHATSAPP',
+      recipient: lead.phone || lead.email || '',
+      subject: '',
+      body: '',
+    };
+    this.editingLead = false;
+    this.duplicateHits = [];
+    this.leadDrawerTab = 'overview';
+    this.convertStep = 1;
+    this.showMoreLeadActions = false;
+    this.syncEditLeadForm(lead);
+    this.resetPartyConvertForm(lead);
+    this.initQualificationFromLead(lead);
+    if (!this.qualificationSchemas.length) {
+      this.loadQualificationSchemas();
+    }
     this.loadTimeline(lead.id);
     this.loadLeadInsights();
     this.loadLeadHygiene(lead.id);
     this.loadOfflineNote(lead.id);
     this.refreshFfVisitUrl(lead);
+    if (!this.accounts.length) {
+      this.loadAccounts();
+    }
     if (this.can('sequences')) {
       this.loadSequences();
     }
   }
 
+  private syncEditLeadForm(lead: Lead): void {
+    this.editLeadForm = {
+      title: lead.title || '',
+      displayName: lead.displayName || '',
+      companyName: lead.companyName || '',
+      email: lead.email || '',
+      phone: lead.phone || '',
+      sourceCode: lead.sourceCode || '',
+      priority: lead.priority || 'MEDIUM',
+      status: lead.status || 'OPEN',
+      profile: readLeadProfile(lead.attributes),
+    };
+  }
+
+  startEditLead(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.syncEditLeadForm(this.selectedLead);
+    this.editingLead = true;
+  }
+
+  cancelEditLead(): void {
+    this.editingLead = false;
+    if (this.selectedLead) {
+      this.syncEditLeadForm(this.selectedLead);
+    }
+  }
+
+  saveLeadEdit(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    if (!this.editLeadForm.title.trim()) {
+      this.error = 'Title is required';
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .updateLead(this.selectedLead.id, {
+        title: this.editLeadForm.title.trim(),
+        displayName: this.editLeadForm.displayName || null,
+        companyName: this.editLeadForm.companyName || null,
+        email: this.editLeadForm.email || null,
+        phone: this.editLeadForm.phone || null,
+        sourceCode: this.editLeadForm.sourceCode || null,
+        priority: this.editLeadForm.priority || null,
+        status: this.editLeadForm.status || null,
+        accountId: this.selectedLead.accountId ?? null,
+        contactId: this.selectedLead.contactId ?? null,
+        campaignId: this.selectedLead.campaignId ?? null,
+        attributes: mergeLeadProfile(this.selectedLead.attributes, this.editLeadForm.profile),
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.selectedLead = lead;
+          this.editingLead = false;
+          this.syncEditLeadForm(lead);
+          this.message = `Lead #${lead.id} updated`;
+          this.loadLeads();
+          this.loadTimeline(lead.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Update lead failed');
+        },
+      });
+  }
+
   closeLead(): void {
     this.selectedLead = null;
+    this.editingLead = false;
     this.timeline = [];
     this.leadTags = [];
     this.leadAttachments = [];
@@ -1169,32 +2056,98 @@ export class AppComponent implements OnInit {
   }
 
   loadInsights(): void {
-    this.api.analyticsSummary().subscribe({
-      next: (s) => {
+    this.api.analyticsDashboard().subscribe({
+      next: (dash) => {
+        const s =
+          dash['summary'] && typeof dash['summary'] === 'object'
+            ? (dash['summary'] as Record<string, unknown>)
+            : dash;
         this.analytics = s;
+        this.dashboardScope = String(dash['scope'] || s['scope'] || '');
+        const pack = dash['rolePack'];
+        this.dashboardRolePack = Array.isArray(pack) ? (pack as string[]) : [];
         this.leadFunnel = this.asRows(s, 'leadFunnel');
         this.leadSources = this.asRows(s, 'leadSources');
         this.campaignStats = this.asRows(s, 'campaigns');
         this.utmSources = this.asRows(s, 'utmSources');
         this.dealFunnel = this.asRows(s, 'dealFunnel');
-        const pipelineAmount = this.dealFunnel.reduce((sum, row) => {
-          const n = Number(row['amount']);
-          return sum + (Number.isFinite(n) ? n : 0);
-        }, 0);
+        const kpis =
+          dash['kpis'] && typeof dash['kpis'] === 'object'
+            ? (dash['kpis'] as Record<string, unknown>)
+            : {};
         this.dashboardKpis = {
-          openDeals: Number(s['openDeals'] ?? 0),
-          wonDeals: Number(s['wonDeals'] ?? 0),
-          lostDeals: Number(s['lostDeals'] ?? 0),
-          overdueTasks: Number(s['overdueTasks'] ?? 0),
-          pipelineAmount,
+          openDeals: Number(kpis['openDeals'] ?? s['openDeals'] ?? 0),
+          wonDeals: Number(kpis['wonDeals'] ?? s['wonDeals'] ?? 0),
+          lostDeals: Number(kpis['lostDeals'] ?? s['lostDeals'] ?? 0),
+          overdueTasks: Number(kpis['overdueTasks'] ?? s['overdueTasks'] ?? 0),
+          pipelineAmount: Number(kpis['pipelineAmount'] ?? 0),
+          openLeads: Number(kpis['openLeads'] ?? s['openLeads'] ?? 0),
+          hotLeads: Number(kpis['hotLeads'] ?? s['hotLeads'] ?? 0),
         };
+        if (dash['pipeline'] && typeof dash['pipeline'] === 'object') {
+          this.pipelineAnalytics = dash['pipeline'] as Record<string, unknown>;
+        } else if (this.dashboardScope === 'OWN') {
+          this.pipelineAnalytics = null;
+        } else {
+          this.api.pipelineAnalytics().subscribe({
+            next: (p) => (this.pipelineAnalytics = p || null),
+            error: () => (this.pipelineAnalytics = null),
+          });
+        }
       },
-      error: (err) => this.setError(err, 'Analytics failed'),
+      error: (err) => this.setError(err, 'Analytics dashboard failed'),
     });
     this.api.listOpenTasks().subscribe({
       next: (t) => (this.openTasks = t || []),
       error: () => (this.openTasks = []),
     });
+    this.loadReportSchedules();
+  }
+
+  showDashboardWidget(key: string): boolean {
+    if (!this.dashboardRolePack.length) {
+      return true;
+    }
+    return this.dashboardRolePack.includes(key);
+  }
+
+  downloadAnalyticsExport(): void {
+    this.api.exportAnalyticsCsv().subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'crm-analytics.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        this.message = 'Analytics CSV downloaded';
+      },
+      error: (err) => this.setError(err, 'Export failed'),
+    });
+  }
+
+  loadReportSchedules(): void {
+    this.api.listReportSchedules().subscribe({
+      next: (rows) => (this.reportSchedules = rows || []),
+      error: () => (this.reportSchedules = []),
+    });
+  }
+
+  viewReportLastResult(code: string): void {
+    if (!code) {
+      return;
+    }
+    this.api.getReportLastResult(code).subscribe({
+      next: (r) => {
+        this.lastReportResult = r || null;
+        this.message = `Loaded last result for ${code}`;
+      },
+      error: (err) => this.setError(err, 'Load report result failed'),
+    });
+  }
+
+  pipelineRows(key: string): Array<Record<string, unknown>> {
+    return this.asRows(this.pipelineAnalytics, key);
   }
 
   private asRows(source: Record<string, unknown> | null, key: string): Array<Record<string, unknown>> {
@@ -1207,8 +2160,70 @@ export class AppComponent implements OnInit {
       next: (r) => {
         this.message = `SLA: created ${r.tasksCreated}, overdue open ${r.openOverdueTasks}`;
         this.loadInsights();
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
       },
       error: (err) => this.setError(err, 'SLA process failed'),
+    });
+  }
+
+  loadMyDay(): void {
+    this.api.myDay().subscribe({
+      next: (snap) => {
+        this.myDay = snap || null;
+        const recent = snap?.['recentActivities'];
+        this.myDayActivities = Array.isArray(recent) ? (recent as Array<Record<string, unknown>>) : [];
+      },
+      error: (err) => {
+        this.myDay = null;
+        this.myDayActivities = [];
+        this.setError(err, 'Failed to load My Day');
+      },
+    });
+  }
+
+  myDayRows(key: string): Array<Record<string, unknown>> {
+    return this.asRows(this.myDay, key);
+  }
+
+  myDayCount(key: string): number {
+    const counts = this.myDay?.['counts'];
+    if (counts && typeof counts === 'object') {
+      return Number((counts as Record<string, unknown>)[key] ?? 0);
+    }
+    return 0;
+  }
+
+  completeMyDayTask(taskId: number): void {
+    if (!taskId) {
+      return;
+    }
+    this.busy = true;
+    this.api.completeTask(taskId).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Task #${taskId} done`;
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Complete task failed');
+      },
+    });
+  }
+
+  openMyDayLead(leadId: number): void {
+    if (!leadId) {
+      return;
+    }
+    this.api.getLead(leadId).subscribe({
+      next: (lead) => {
+        void this.router.navigate(['/leads']);
+        this.applyModule('leads', true);
+        this.openLead(lead);
+      },
+      error: (err) => this.setError(err, 'Open lead failed'),
     });
   }
 
@@ -1399,6 +2414,8 @@ export class AppComponent implements OnInit {
       next: (r) => (this.scoreRules = r || []),
       error: () => (this.scoreRules = []),
     });
+    this.loadScoreBands();
+    this.loadQualificationSchemas();
     if (this.can('automation')) {
       this.api.listStageAutomationRules().subscribe({
         next: (r) => (this.stageAutomationRules = r || []),
@@ -1406,6 +2423,10 @@ export class AppComponent implements OnInit {
       });
     } else {
       this.stageAutomationRules = [];
+    }
+    if (this.can('sequences')) {
+      this.loadSequences();
+      this.loadSequenceEnrollments();
     }
     this.api.meters().subscribe({
       next: (m) => {
@@ -1571,15 +2592,28 @@ export class AppComponent implements OnInit {
       return;
     }
     const title = this.stageRuleForm.title.trim();
-    if (!this.stageRuleForm.toStageCode.trim() || !title) {
-      this.error = 'Stage code and title/summary are required';
+    if (!this.stageRuleForm.toStageCode.trim()) {
+      this.error = 'Stage code is required';
+      return;
+    }
+    if (this.stageRuleForm.actionType !== 'ENROLL_SEQUENCE' && !title) {
+      this.error = 'Title/summary is required';
+      return;
+    }
+    if (this.stageRuleForm.actionType === 'ENROLL_SEQUENCE' && this.stageRuleForm.sequenceId == null) {
+      this.error = 'Pick a sequence for ENROLL_SEQUENCE';
       return;
     }
     this.busy = true;
     const actionConfig =
       this.stageRuleForm.actionType === 'CREATE_TASK'
         ? { title, dueHours: 24, priority: 'MEDIUM' }
-        : { summary: title };
+        : this.stageRuleForm.actionType === 'TIMELINE_NOTE'
+          ? { summary: title }
+          : {
+              sequenceId: this.stageRuleForm.sequenceId,
+              recipientFrom: 'PHONE',
+            };
     this.api
       .createStageAutomationRule({
         objectType: this.stageRuleForm.objectType,
@@ -1600,6 +2634,58 @@ export class AppComponent implements OnInit {
           this.setError(err, 'Stage rule failed');
         },
       });
+  }
+
+  toggleStageRule(rule: Record<string, unknown>): void {
+    const id = Number(rule['id']);
+    if (!id) {
+      return;
+    }
+    this.busy = true;
+    this.api.setStageAutomationActive(id, !rule['active']).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Rule #${id} ${rule['active'] ? 'disabled' : 'enabled'}`;
+        this.loadOps();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Toggle rule failed');
+      },
+    });
+  }
+
+  loadSequenceEnrollments(): void {
+    if (!this.can('sequences')) {
+      return;
+    }
+    this.api.listSequenceEnrollments().subscribe({
+      next: (rows) => (this.sequenceEnrollments = rows || []),
+      error: () => (this.sequenceEnrollments = []),
+    });
+  }
+
+  actOnEnrollment(id: number, action: 'pause' | 'resume' | 'cancel' | 'retry'): void {
+    const call =
+      action === 'pause'
+        ? this.api.pauseSequenceEnrollment(id)
+        : action === 'resume'
+          ? this.api.resumeSequenceEnrollment(id)
+          : action === 'cancel'
+            ? this.api.cancelSequenceEnrollment(id)
+            : this.api.retrySequenceEnrollment(id);
+    this.busy = true;
+    call.subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `Enrollment #${id} ${action}`;
+        this.loadSequenceEnrollments();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, `Enrollment ${action} failed`);
+      },
+    });
   }
 
   rescoreSelected(): void {
@@ -1707,6 +2793,9 @@ export class AppComponent implements OnInit {
       next: () => {
         this.message = approve ? 'Approved' : 'Rejected';
         this.loadOps();
+        if (this.module === 'home') {
+          this.loadMyDay();
+        }
         if (this.selectedQuote) {
           this.loadQuotesForOpp(this.selectedQuote.opportunityId);
           this.api.listQuotationsForOpportunity(this.selectedQuote.opportunityId).subscribe({
@@ -1747,6 +2836,7 @@ export class AppComponent implements OnInit {
       .subscribe({
         next: () => {
           this.message = 'Report schedule saved';
+          this.loadReportSchedules();
         },
         error: (err) => this.setError(err, 'Schedule failed'),
       });
@@ -1755,7 +2845,8 @@ export class AppComponent implements OnInit {
   runReports(): void {
     this.api.runReports().subscribe({
       next: (r) => {
-        this.message = `Reports ran: ${r['ran']}`;
+        this.message = `Reports ran: ${r['ran']} (skipped ${r['skipped'] ?? 0})`;
+        this.loadReportSchedules();
       },
       error: (err) => this.setError(err, 'Run reports failed'),
     });
@@ -1786,24 +2877,12 @@ export class AppComponent implements OnInit {
     }
     this.api.findDuplicates(this.selectedLead.id).subscribe({
       next: (rows) => {
-        if (!rows?.length) {
-          this.message = 'No duplicates by phone/email';
+        this.duplicateHits = rows || [];
+        if (!this.duplicateHits.length) {
+          this.message = 'No duplicates for enabled rules (phone/email/GSTIN)';
           return;
         }
-        const first = rows[0];
-        const dupId = Number(first['id']);
-        if (!dupId || !confirm(`Merge duplicate #${dupId} into #${this.selectedLead!.id}?`)) {
-          this.message = `Found ${rows.length} duplicate(s)`;
-          return;
-        }
-        this.api.mergeLeads(this.selectedLead!.id, dupId).subscribe({
-          next: () => {
-            this.message = `Merged #${dupId} into #${this.selectedLead!.id}`;
-            this.loadLeads();
-            this.loadTimeline(this.selectedLead!.id);
-          },
-          error: (err) => this.setError(err, 'Merge failed'),
-        });
+        this.message = `Found ${this.duplicateHits.length} duplicate(s) — pick one to merge`;
       },
       error: (err) => this.setError(err, 'Duplicate search failed'),
     });
@@ -2015,6 +3094,73 @@ export class AppComponent implements OnInit {
         this.setError(err, 'Failed to add note');
       },
     });
+  }
+
+  onMessageChannelChange(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    if (this.messageForm.channel === 'EMAIL') {
+      this.messageForm.recipient = this.selectedLead.email || this.messageForm.recipient;
+    } else {
+      this.messageForm.recipient = this.selectedLead.phone || this.selectedLead.email || this.messageForm.recipient;
+    }
+  }
+
+  useAiDraftForMessage(): void {
+    if (!this.selectedLead || !this.can('ai')) {
+      this.error = this.can('ai') ? 'Select a lead' : this.upgradeHint('AI');
+      return;
+    }
+    this.busy = true;
+    this.api.draftMessage(this.selectedLead.id, this.messageForm.channel).subscribe({
+      next: (ins) => {
+        this.busy = false;
+        this.messageForm.body = String(ins['body'] || ins['draft'] || this.messageForm.body);
+        this.lastInsight = ins;
+        this.message = 'AI draft loaded into compose';
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'AI draft failed');
+      },
+    });
+  }
+
+  sendLeadMessage(): void {
+    if (!this.selectedLead || !this.messageForm.body.trim()) {
+      this.error = 'Message body required';
+      return;
+    }
+    if (!this.canChannel(this.messageForm.channel)) {
+      this.error = this.upgradeHint(this.messageForm.channel);
+      return;
+    }
+    this.busy = true;
+    this.error = '';
+    this.api
+      .sendMessage({
+        leadId: this.selectedLead.id,
+        channel: this.messageForm.channel,
+        recipient: this.messageForm.recipient || null,
+        subject: this.messageForm.subject || null,
+        body: this.messageForm.body.trim(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.busy = false;
+          const del = res['delivery'] as Record<string, unknown> | undefined;
+          this.message =
+            `Message ${res['eventType'] || 'queued'}` +
+            (del?.['status'] ? ` · ${del['status']}` : '');
+          this.messageForm.body = '';
+          this.loadTimeline(this.selectedLead!.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Send message failed');
+        },
+      });
   }
 
   moveLead(lead: Lead, stageId: number): void {
@@ -2538,6 +3684,13 @@ export class AppComponent implements OnInit {
 
   private setError(err: unknown, fallback: string): void {
     const e = err as { error?: { message?: string; error?: string }; message?: string; status?: number };
+    if (e?.status === 401) {
+      this.hasAuthToken = false;
+      this.showLogin = true;
+      this.error =
+        'Unauthorized (HTTP 401) — click Login and sign in with shopId / username / password, then retry';
+      return;
+    }
     const detail = e?.error?.message || e?.error?.error || e?.message || fallback;
     this.error = typeof detail === 'string' ? detail : fallback;
     if (e?.status) {

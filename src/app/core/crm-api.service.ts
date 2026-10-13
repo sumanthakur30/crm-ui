@@ -82,6 +82,10 @@ export class CrmApiService {
     return this.http.post<Lead>(`${this.base}/leads`, body);
   }
 
+  updateLead(id: number, body: LeadUpsert): Observable<Lead> {
+    return this.http.put<Lead>(`${this.base}/leads/${id}`, body);
+  }
+
   moveStage(leadId: number, stageId: number): Observable<Lead> {
     return this.http.post<Lead>(`${this.base}/leads/${leadId}/stage/${stageId}`, {});
   }
@@ -192,6 +196,18 @@ export class CrmApiService {
     return this.http.get<Record<string, unknown>>(`${this.base}/analytics/summary`);
   }
 
+  analyticsDashboard(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/analytics/dashboard`);
+  }
+
+  exportAnalyticsCsv(): Observable<Blob> {
+    return this.http.get(`${this.base}/analytics/export.csv`, { responseType: 'blob' });
+  }
+
+  pipelineAnalytics(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/analytics/pipeline`);
+  }
+
   processSlaAging(): Observable<{ tasksCreated: number; openOverdueTasks: number }> {
     return this.http.post<{ tasksCreated: number; openOverdueTasks: number }>(
       `${this.base}/tasks/sla/process-aging`,
@@ -203,9 +219,63 @@ export class CrmApiService {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/tasks`);
   }
 
+  completeTask(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/tasks/${id}/complete`, {});
+  }
+
+  myDay(hotMinScore?: number, hotLimit?: number): Observable<Record<string, unknown>> {
+    let params = new HttpParams();
+    if (hotMinScore != null) {
+      params = params.set('hotMinScore', hotMinScore);
+    }
+    if (hotLimit != null) {
+      params = params.set('hotLimit', hotLimit);
+    }
+    return this.http.get<Record<string, unknown>>(`${this.base}/my-day`, { params });
+  }
+
+  listActivities(opts?: {
+    from?: string;
+    to?: string;
+    types?: string;
+    limit?: number;
+  }): Observable<Array<Record<string, unknown>>> {
+    let params = new HttpParams();
+    if (opts?.from) {
+      params = params.set('from', opts.from);
+    }
+    if (opts?.to) {
+      params = params.set('to', opts.to);
+    }
+    if (opts?.types) {
+      params = params.set('types', opts.types);
+    }
+    if (opts?.limit != null) {
+      params = params.set('limit', opts.limit);
+    }
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/activities`, { params });
+  }
+
   convertLead(id: number, targetSystem: string): Observable<Record<string, unknown>> {
     const params = new HttpParams().set('targetSystem', targetSystem);
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert`, {}, { params });
+  }
+
+  convertLeadToCrm(
+    id: number,
+    body: {
+      accountMode: 'CREATE' | 'EXISTING';
+      accountId?: number | null;
+      account?: Partial<CrmAccount> | null;
+      contactMode: 'CREATE' | 'EXISTING' | 'NONE';
+      contactId?: number | null;
+      contact?: Partial<CrmContact> | null;
+      createOpportunity: boolean;
+      opportunity?: { name?: string; amount?: number | null; currency?: string | null } | null;
+      markLeadConverted?: boolean;
+    }
+  ): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/leads/${id}/convert-to-crm`, body);
   }
 
   ensureWelcomeSequence(): Observable<Sequence> {
@@ -235,6 +305,37 @@ export class CrmApiService {
       `${this.base}/sequences/process-due?limit=${limit}`,
       {}
     );
+  }
+
+  sendMessage(body: {
+    leadId: number;
+    channel: string;
+    recipient?: string | null;
+    subject?: string | null;
+    body: string;
+    templateCode?: string | null;
+  }): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/messages/send`, body);
+  }
+
+  listSequenceEnrollments(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/sequences/enrollments`);
+  }
+
+  pauseSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/pause`, {});
+  }
+
+  resumeSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/resume`, {});
+  }
+
+  cancelSequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/cancel`, {});
+  }
+
+  retrySequenceEnrollment(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/sequences/enrollments/${id}/retry`, {});
   }
 
   fieldForceEmbedConfig(): Observable<FieldForceEmbedConfig> {
@@ -293,6 +394,37 @@ export class CrmApiService {
     return this.http.post<Array<Record<string, unknown>>>(`${this.base}/scoring/rules/ensure-defaults`, {});
   }
 
+  listScoreRules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/scoring/rules`);
+  }
+
+  upsertScoreRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/scoring/rules`, body);
+  }
+
+  getScoreBands(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/scoring/bands`);
+  }
+
+  updateScoreBands(body: { hotMin: number; warmMin: number }): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/scoring/bands`, body);
+  }
+
+  listQualificationSchemas(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/qualification/schemas`);
+  }
+
+  upsertQualificationSchema(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/qualification/schemas`, body);
+  }
+
+  saveLeadQualification(
+    leadId: number,
+    body: { schemaCode: string; answers: Record<string, unknown> }
+  ): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/qualification/leads/${leadId}`, body);
+  }
+
   scoreEvent(leadId: number, eventType: string, summary?: string): Observable<Lead> {
     return this.http.post<Lead>(`${this.base}/scoring/leads/${leadId}/events`, { eventType, summary });
   }
@@ -338,6 +470,11 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/automation/stage-rules`, body);
   }
 
+  setStageAutomationActive(id: number, active: boolean): Observable<Record<string, unknown>> {
+    const path = active ? 'activate' : 'deactivate';
+    return this.http.post<Record<string, unknown>>(`${this.base}/automation/stage-rules/${id}/${path}`, {});
+  }
+
   logCall(body: Record<string, unknown>): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/ops/calls`, body);
   }
@@ -348,6 +485,14 @@ export class CrmApiService {
 
   runReports(): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/reports/run-due`, {});
+  }
+
+  listReportSchedules(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/reports/schedules`);
+  }
+
+  getReportLastResult(code: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/reports/schedules/${code}/last-result`);
   }
 
   upsertReportSchedule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
@@ -378,8 +523,33 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/leads/${survivorId}/merge/${duplicateId}`, {});
   }
 
+  listDuplicateRules(objectType = 'LEAD'): Observable<Array<Record<string, unknown>>> {
+    const params = new HttpParams().set('objectType', objectType);
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/duplicate-rules`, { params });
+  }
+
+  upsertDuplicateRule(body: Record<string, unknown>): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/duplicate-rules`, body);
+  }
+
   listAccounts(): Observable<CrmAccount[]> {
     return this.http.get<CrmAccount[]>(`${this.base}/accounts`);
+  }
+
+  getAccount(id: number): Observable<CrmAccount> {
+    return this.http.get<CrmAccount>(`${this.base}/accounts/${id}`);
+  }
+
+  getAccountSummary(id: number): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/accounts/${id}/summary`);
+  }
+
+  accountTimeline(id: number): Observable<TimelineItem[]> {
+    return this.http.get<TimelineItem[]>(`${this.base}/accounts/${id}/timeline`);
+  }
+
+  addAccountNote(id: number, body: string): Observable<unknown> {
+    return this.http.post(`${this.base}/accounts/${id}/notes`, { body });
   }
 
   upsertAccount(body: Partial<CrmAccount> & { name: string }): Observable<CrmAccount> {
@@ -468,6 +638,14 @@ export class CrmApiService {
   listAiInsights(relatedType: string, relatedId: number): Observable<Array<Record<string, unknown>>> {
     const params = new HttpParams().set('relatedType', relatedType).set('relatedId', relatedId);
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/ai/insights`, { params });
+  }
+
+  aiStatus(): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(`${this.base}/ai/status`);
+  }
+
+  listTerritories(): Observable<Array<Record<string, unknown>>> {
+    return this.http.get<Array<Record<string, unknown>>>(`${this.base}/labs/territories`);
   }
 
   // —— Phase 4 Enterprise ——
