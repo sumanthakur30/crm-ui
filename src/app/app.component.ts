@@ -359,6 +359,7 @@ export class AppComponent implements OnInit, OnDestroy {
   sequenceEnrollments: Array<Record<string, unknown>> = [];
   callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
   meetingTitle = 'Discovery call';
+  meetingWhen = '';
   adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
   adapterPhone = '';
   adapterName = '';
@@ -1794,6 +1795,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.editingLead = false;
     this.duplicateHits = [];
     this.leadDrawerTab = 'overview';
+    this.meetingWhen = '';
     this.convertStep = 1;
     this.showMoreLeadActions = false;
     this.syncEditLeadForm(lead);
@@ -1899,6 +1901,7 @@ export class AppComponent implements OnInit, OnDestroy {
   openOpp(opp: Opportunity): void {
     this.selectedOpp = opp;
     this.oppFollowUpDate = readLeadProfile(opp.attributes).nextFollowUpDate;
+    this.meetingWhen = '';
     this.selectedLead = null;
     this.selectedQuote = null;
     this.quoteForm.opportunityId = opp.id;
@@ -2945,22 +2948,62 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!this.selectedLead) {
       return;
     }
-    const starts = new Date(Date.now() + 3600_000).toISOString();
+    this.bookMeeting('LEAD', this.selectedLead.id, () => {
+      this.loadTimeline(this.selectedLead!.id);
+      this.loadLeads();
+    });
+  }
+
+  bookDealMeeting(): void {
+    if (!this.selectedOpp) {
+      return;
+    }
+    this.bookMeeting('OPPORTUNITY', this.selectedOpp.id, () => undefined);
+  }
+
+  private bookMeeting(relatedType: 'LEAD' | 'OPPORTUNITY', relatedId: number, afterSave: () => void): void {
+    const startsAt = this.kolkataInstant(this.meetingWhen);
+    if (!startsAt) {
+      this.error = 'Choose the meeting date and time';
+      return;
+    }
+    const endsAt = new Date(new Date(startsAt).getTime() + 30 * 60 * 1000).toISOString();
+    this.busy = true;
     this.api
       .createCalendar({
-        relatedType: 'LEAD',
-        relatedId: this.selectedLead.id,
+        relatedType,
+        relatedId,
         title: this.meetingTitle || 'Meeting',
-        startsAt: starts,
+        startsAt,
+        endsAt,
       })
       .subscribe({
         next: () => {
-          this.message = 'Meeting booked (+score)';
-          this.loadTimeline(this.selectedLead!.id);
-          this.loadLeads();
+          this.busy = false;
+          this.message = `Meeting booked for ${this.meetingWhen.replace('T', ' ')}`;
+          this.error = '';
+          afterSave();
         },
-        error: (err) => this.setError(err, 'Calendar failed'),
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Calendar failed');
+        },
       });
+  }
+
+  /** Wall-clock time from the picker, read as Asia/Kolkata so My Day shows that same day. */
+  private kolkataInstant(localDateTime: string): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec((localDateTime || '').trim());
+    if (!match) {
+      return '';
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const utcMillis = Date.UTC(year, month - 1, day, hour, minute) - (5 * 60 + 30) * 60 * 1000;
+    return new Date(utcMillis).toISOString();
   }
 
   requestOppApproval(): void {

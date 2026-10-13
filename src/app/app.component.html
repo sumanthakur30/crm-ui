@@ -1539,7 +1539,7 @@
     <button type="button" class="btn primary" (click)="openConvertWizard()">Convert to CRM</button>
     <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Log call</button>
     <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Add note</button>
-    <button type="button" class="btn" (click)="bookMeetingSelected()">Book meeting</button>
+    <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Book meeting</button>
     <button type="button" class="btn ghost" (click)="showMoreLeadActions = !showMoreLeadActions">More</button>
   </div>
   <div class="more-menu" *ngIf="showMoreLeadActions">
@@ -1769,6 +1769,12 @@
       >
         Call
       </button>
+    </div>
+    <h3>Book a meeting</h3>
+    <div class="row wrap">
+      <input [(ngModel)]="meetingTitle" name="meetingTitle" placeholder="Title" />
+      <input type="datetime-local" [(ngModel)]="meetingWhen" name="meetingWhen" />
+      <button type="button" class="btn" [disabled]="busy || !meetingWhen" (click)="bookMeetingSelected()">Book meeting</button>
     </div>
   </section>
 
@@ -2192,6 +2198,14 @@
         <span class="badge warn" *ngIf="oppFollowUpOverdue(opp)">Overdue</span>
         <span class="muted" *ngIf="lastFollowUpOn(opp)">Completed {{ lastFollowUpOn(opp) }}</span>
         <button type="button" class="btn" [disabled]="busy" (click)="saveOppFollowUp()">Save follow-up</button>
+      </dd>
+    </div>
+    <div>
+      <dt>Meeting</dt>
+      <dd>
+        <input [(ngModel)]="meetingTitle" name="dealMeetingTitle" placeholder="Title" />
+        <input type="datetime-local" [(ngModel)]="meetingWhen" name="dealMeetingWhen" />
+        <button type="button" class="btn" [disabled]="busy || !meetingWhen" (click)="bookDealMeeting()">Book meeting</button>
       </dd>
     </div>
     <div *ngIf="opp.closeReasonCode"><dt>Close reason</dt><dd>{{ opp.closeReasonCode }}<span *ngIf="opp.closeReasonNote"> — {{ opp.closeReasonNote }}</span></dd></div>
