@@ -97,6 +97,8 @@ export class AppComponent implements OnInit, OnDestroy {
   selectedOpp: Opportunity | null = null;
   selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
+  oppTimeline: TimelineItem[] = [];
+  oppNoteDraft = '';
   noteDraft = '';
   messageForm = {
     channel: 'WHATSAPP' as 'WHATSAPP' | 'SMS' | 'EMAIL',
@@ -247,7 +249,9 @@ export class AppComponent implements OnInit, OnDestroy {
     currency: 'INR',
     leadId: null as number | null,
     accountId: null as number | null,
+    nextFollowUpDate: '',
   };
+  oppFollowUpDate = '';
 
   quoteForm = {
     opportunityId: null as number | null,
@@ -357,6 +361,9 @@ export class AppComponent implements OnInit, OnDestroy {
   sequenceEnrollments: Array<Record<string, unknown>> = [];
   callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
   meetingTitle = 'Discovery call';
+  meetingWhen = '';
+  movingMeetingId: number | null = null;
+  meetingMoveWhen = '';
   adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
   adapterPhone = '';
   adapterName = '';
@@ -885,7 +892,11 @@ export class AppComponent implements OnInit, OnDestroy {
         if (this.selectedOpp) {
           const fresh = this.opportunities.find((o) => o.id === this.selectedOpp!.id);
           if (fresh) {
+            const editingSameDate = this.oppFollowUpDate === this.dealFollowUp(this.selectedOpp);
             this.selectedOpp = fresh;
+            if (editingSameDate) {
+              this.oppFollowUpDate = this.dealFollowUp(fresh);
+            }
             this.loadQuotesForOpp(fresh.id);
           }
         }
@@ -1684,13 +1695,25 @@ export class AppComponent implements OnInit, OnDestroy {
         accountId,
         amount: this.oppForm.amount ?? fromLead?.amount ?? null,
         currency: this.oppForm.currency || fromLead?.currency || 'INR',
+        attributes: mergeLeadProfile(null, {
+          ...emptyLeadProfile(),
+          nextFollowUpDate:
+            this.oppForm.nextFollowUpDate || readLeadProfile(fromLead?.attributes).nextFollowUpDate,
+        }),
       })
       .subscribe({
         next: (opp) => {
           this.busy = false;
           this.message = `Opportunity #${opp.id} created`;
           this.error = '';
-          this.oppForm = { name: '', amount: null, currency: 'INR', leadId: null, accountId: null };
+          this.oppForm = {
+            name: '',
+            amount: null,
+            currency: 'INR',
+            leadId: null,
+            accountId: null,
+            nextFollowUpDate: '',
+          };
           this.loadOpportunities();
           this.setModule('deals');
           this.openOpp(opp);
@@ -1776,6 +1799,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.editingLead = false;
     this.duplicateHits = [];
     this.leadDrawerTab = 'overview';
+    this.meetingWhen = '';
     this.convertStep = 1;
     this.showMoreLeadActions = false;
     this.syncEditLeadForm(lead);
@@ -1880,6 +1904,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   openOpp(opp: Opportunity): void {
     this.selectedOpp = opp;
+    this.oppFollowUpDate = readLeadProfile(opp.attributes).nextFollowUpDate;
+    this.meetingWhen = '';
+    this.callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
+    this.oppNoteDraft = '';
+    this.loadOppTimeline(opp.id);
     this.selectedLead = null;
     this.selectedQuote = null;
     this.quoteForm.opportunityId = opp.id;
@@ -1888,7 +1917,112 @@ export class AppComponent implements OnInit, OnDestroy {
 
   closeOpp(): void {
     this.selectedOpp = null;
+    this.oppFollowUpDate = '';
     this.quotations = [];
+    this.oppTimeline = [];
+    this.oppNoteDraft = '';
+  }
+
+  addDealNote(): void {
+    if (!this.selectedOpp || !this.oppNoteDraft.trim()) {
+      return;
+    }
+    this.busy = true;
+    this.api.addOpportunityNote(this.selectedOpp.id, this.oppNoteDraft.trim()).subscribe({
+      next: () => {
+        this.busy = false;
+        this.oppNoteDraft = '';
+        this.message = 'Note added';
+        this.error = '';
+        this.loadOppTimeline(this.selectedOpp!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not add the note');
+      },
+    });
+  }
+
+  loadOppTimeline(opportunityId: number): void {
+    this.api.opportunityTimeline(opportunityId).subscribe({
+      next: (items) => (this.oppTimeline = items || []),
+      error: () => (this.oppTimeline = []),
+    });
+  }
+
+  logDealCall(): void {
+    if (!this.selectedOpp) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .logCall({
+        opportunityId: this.selectedOpp.id,
+        phone: this.callForm.phone,
+        outcome: this.callForm.outcome,
+        durationSec: this.callForm.durationSec,
+        direction: 'OUTBOUND',
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = 'Call logged';
+          this.error = '';
+          this.loadOppTimeline(this.selectedOpp!.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Call log failed');
+        },
+      });
+  }
+
+  dealFollowUp(opp: Opportunity): string {
+    return readLeadProfile(opp.attributes).nextFollowUpDate;
+  }
+
+  oppFollowUpOverdue(opp: Opportunity): boolean {
+    return isFollowUpOverdue(this.dealFollowUp(opp), this.todayIso());
+  }
+
+  saveOppFollowUp(): void {
+    const opp = this.selectedOpp;
+    if (!opp) {
+      return;
+    }
+    const profile = emptyLeadProfile();
+    profile.nextFollowUpDate = this.oppFollowUpDate;
+    this.busy = true;
+    this.api
+      .updateOpportunity(opp.id, {
+        name: opp.name,
+        leadId: opp.leadId,
+        accountId: opp.accountId,
+        pipelineId: opp.pipelineId,
+        stageId: opp.stageId,
+        amount: opp.amount,
+        currency: opp.currency,
+        probability: opp.probability,
+        expectedCloseDate: opp.expectedCloseDate,
+        status: opp.status,
+        ownerUserId: opp.ownerUserId,
+        closeReasonCode: opp.closeReasonCode,
+        closeReasonNote: opp.closeReasonNote,
+        attributes: mergeLeadProfile(opp.attributes, profile),
+      })
+      .subscribe({
+        next: (updated) => {
+          this.busy = false;
+          this.selectedOpp = updated;
+          this.oppFollowUpDate = readLeadProfile(updated.attributes).nextFollowUpDate;
+          this.message = `Follow-up saved for deal #${updated.id}`;
+          this.loadOpportunities();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Save deal follow-up failed');
+        },
+      });
   }
 
   loadQuotesForOpp(opportunityId: number): void {
@@ -2168,7 +2302,15 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  weekDays: Array<Record<string, unknown>> = [];
+  weekLabel = '';
+  calendarView: 'day' | 'week' | 'month' = 'week';
+  closingTaskId: number | null = null;
+  followUpNextDate = '';
+  followUpNote = '';
+
   loadMyDay(): void {
+    this.loadCalendar();
     this.api.myDay().subscribe({
       next: (snap) => {
         this.myDay = snap || null;
@@ -2183,6 +2325,68 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadCalendar(anchor?: string): void {
+    this.api.myDayCalendar(this.calendarView, anchor).subscribe({
+      next: (calendar) => {
+        const days = calendar?.['days'];
+        this.weekDays = Array.isArray(days) ? (days as Array<Record<string, unknown>>) : [];
+        const start = String(calendar?.['rangeStart'] || '');
+        const end = String(calendar?.['rangeEnd'] || '');
+        this.weekLabel = start && end && start !== end ? `${start} – ${end}` : start;
+      },
+      error: () => {
+        this.weekDays = [];
+        this.weekLabel = '';
+      },
+    });
+  }
+
+  setCalendarView(view: 'day' | 'week' | 'month'): void {
+    this.calendarView = view;
+    const anchor = this.calendarAnchor();
+    this.loadCalendar(anchor || undefined);
+  }
+
+  shiftCalendar(delta: number): void {
+    const anchor = this.calendarAnchor();
+    if (!anchor) {
+      this.loadCalendar();
+      return;
+    }
+    if (this.calendarView === 'month') {
+      this.loadCalendar(this.addIsoMonths(anchor, delta));
+      return;
+    }
+    const step = this.calendarView === 'day' ? 1 : 7;
+    this.loadCalendar(this.addIsoDays(anchor, delta * step));
+  }
+
+  private calendarAnchor(): string {
+    const inRange = this.weekDays.find((day) => day['inRange'] !== false);
+    return String(inRange?.['date'] || this.weekDays[0]?.['date'] || '');
+  }
+
+  private addIsoDays(isoDate: string, days: number): string {
+    const [year, month, day] = isoDate.split('-').map((part) => Number(part));
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  private addIsoMonths(isoDate: string, months: number): string {
+    const [year, month, day] = isoDate.split('-').map((part) => Number(part));
+    const date = new Date(Date.UTC(year, month - 1, 1));
+    date.setUTCMonth(date.getUTCMonth() + months);
+    const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+    date.setUTCDate(Math.min(day, lastDay));
+    return date.toISOString().slice(0, 10);
+  }
+
+  dayItems(day: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
+    const rows = day[key];
+    return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+  }
+
   myDayRows(key: string): Array<Record<string, unknown>> {
     return this.asRows(this.myDay, key);
   }
@@ -2195,22 +2399,47 @@ export class AppComponent implements OnInit, OnDestroy {
     return 0;
   }
 
+  isFollowUpTask(task: Record<string, unknown>): boolean {
+    const source = String(task['sourceCode'] || '');
+    return source === 'LEAD_FOLLOW_UP' || source === 'OPPORTUNITY_FOLLOW_UP';
+  }
+
+  beginFollowUpClose(task: Record<string, unknown>): void {
+    const taskId = Number(task['id']);
+    if (!taskId) {
+      return;
+    }
+    this.closingTaskId = taskId;
+    this.followUpNextDate = '';
+    this.followUpNote = '';
+  }
+
   completeMyDayTask(taskId: number): void {
     if (!taskId) {
       return;
     }
+    const scheduling = this.closingTaskId === taskId;
+    const nextFollowUpDate = scheduling ? this.followUpNextDate.trim() : '';
+    const note = scheduling ? this.followUpNote.trim() : '';
     this.busy = true;
-    this.api.completeTask(taskId).subscribe({
-      next: () => {
-        this.busy = false;
-        this.message = `Task #${taskId} done`;
-        this.loadMyDay();
-      },
-      error: (err) => {
-        this.busy = false;
-        this.setError(err, 'Complete task failed');
-      },
-    });
+    this.api
+      .completeTask(taskId, scheduling ? { nextFollowUpDate: nextFollowUpDate || undefined, note: note || undefined } : undefined)
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.closingTaskId = null;
+          this.followUpNextDate = '';
+          this.followUpNote = '';
+          this.message = nextFollowUpDate
+            ? `Follow-up closed. Next one is ${nextFollowUpDate}.`
+            : `Task #${taskId} done`;
+          this.loadMyDay();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Complete task failed');
+        },
+      });
   }
 
   openMyDayLead(leadId: number): void {
@@ -2224,6 +2453,37 @@ export class AppComponent implements OnInit, OnDestroy {
         this.openLead(lead);
       },
       error: (err) => this.setError(err, 'Open lead failed'),
+    });
+  }
+
+  openCalendarItem(item: Record<string, unknown>): void {
+    const relatedId = Number(item['relatedId']);
+    const relatedType = String(item['relatedType'] || '');
+    if (!relatedId) {
+      return;
+    }
+    if (relatedType === 'LEAD') {
+      this.openMyDayLead(relatedId);
+      return;
+    }
+    if (relatedType === 'OPPORTUNITY') {
+      this.openMyDayDeal(relatedId);
+    }
+  }
+
+  lastFollowUpOn(record: { attributes?: Record<string, unknown> | null } | null): string {
+    const value = record?.attributes?.['lastFollowUpOn'];
+    return typeof value === 'string' ? value : '';
+  }
+
+  private openMyDayDeal(opportunityId: number): void {
+    this.api.getOpportunity(opportunityId).subscribe({
+      next: (opp) => {
+        void this.router.navigate(['/deals']);
+        this.applyModule('deals', true);
+        this.openOpp(opp);
+      },
+      error: (err) => this.setError(err, 'Open deal failed'),
     });
   }
 
@@ -2751,22 +3011,127 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!this.selectedLead) {
       return;
     }
-    const starts = new Date(Date.now() + 3600_000).toISOString();
+    this.bookMeeting('LEAD', this.selectedLead.id, () => {
+      this.loadTimeline(this.selectedLead!.id);
+      this.loadLeads();
+    });
+  }
+
+  bookDealMeeting(): void {
+    if (!this.selectedOpp) {
+      return;
+    }
+    this.bookMeeting('OPPORTUNITY', this.selectedOpp.id, () => undefined);
+  }
+
+  private bookMeeting(relatedType: 'LEAD' | 'OPPORTUNITY', relatedId: number, afterSave: () => void): void {
+    const startsAt = this.kolkataInstant(this.meetingWhen);
+    if (!startsAt) {
+      this.error = 'Choose the meeting date and time';
+      return;
+    }
+    const endsAt = new Date(new Date(startsAt).getTime() + 30 * 60 * 1000).toISOString();
+    this.busy = true;
     this.api
       .createCalendar({
-        relatedType: 'LEAD',
-        relatedId: this.selectedLead.id,
+        relatedType,
+        relatedId,
         title: this.meetingTitle || 'Meeting',
-        startsAt: starts,
+        startsAt,
+        endsAt,
       })
       .subscribe({
         next: () => {
-          this.message = 'Meeting booked (+score)';
-          this.loadTimeline(this.selectedLead!.id);
-          this.loadLeads();
+          this.busy = false;
+          this.message = `Meeting booked for ${this.meetingWhen.replace('T', ' ')}`;
+          this.error = '';
+          afterSave();
         },
-        error: (err) => this.setError(err, 'Calendar failed'),
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Calendar failed');
+        },
       });
+  }
+
+  beginMoveMeeting(meeting: Record<string, unknown>): void {
+    this.movingMeetingId = Number(meeting['id']);
+    this.meetingMoveWhen = this.kolkataLocal(String(meeting['startsAt'] || ''));
+    this.error = '';
+  }
+
+  saveMovedMeeting(id: number): void {
+    const startsAt = this.kolkataInstant(this.meetingMoveWhen);
+    if (!startsAt) {
+      this.error = 'Choose the meeting date and time';
+      return;
+    }
+    this.busy = true;
+    this.api.rescheduleCalendar(id, startsAt).subscribe({
+      next: () => {
+        this.busy = false;
+        this.movingMeetingId = null;
+        this.message = `Meeting moved to ${this.meetingMoveWhen.replace('T', ' ')}`;
+        this.error = '';
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not move the meeting');
+      },
+    });
+  }
+
+  cancelMeeting(id: number): void {
+    this.busy = true;
+    this.api.cancelCalendar(id).subscribe({
+      next: () => {
+        this.busy = false;
+        if (this.movingMeetingId === id) {
+          this.movingMeetingId = null;
+        }
+        this.message = 'Meeting cancelled';
+        this.error = '';
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not cancel the meeting');
+      },
+    });
+  }
+
+  /** Wall-clock time from the picker, read as Asia/Kolkata so My Day shows that same day. */
+  private kolkataInstant(localDateTime: string): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec((localDateTime || '').trim());
+    if (!match) {
+      return '';
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4]);
+    const minute = Number(match[5]);
+    const utcMillis = Date.UTC(year, month - 1, day, hour, minute) - (5 * 60 + 30) * 60 * 1000;
+    return new Date(utcMillis).toISOString();
+  }
+
+  private kolkataLocal(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('year')}-${value('month')}-${value('day')}T${value('hour')}:${value('minute')}`;
   }
 
   requestOppApproval(): void {

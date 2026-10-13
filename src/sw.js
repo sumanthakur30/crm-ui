@@ -1,5 +1,5 @@
 /* Minimal installable shell + offline fallback for CRM UI. */
-const CACHE = 'crm-ui-shell-v2';
+const CACHE = 'crm-ui-shell-v5';
 const SHELL = ['/', '/index.html', '/sw.js', '/assets/manifest.webmanifest', '/manifest.webmanifest', '/assets/icons/icon-192.png', '/assets/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
