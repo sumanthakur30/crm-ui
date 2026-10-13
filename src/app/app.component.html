@@ -257,6 +257,20 @@
           <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
           <label>Email <input type="email" [(ngModel)]="leadForm.email" name="email" /></label>
         </div>
+        <div class="row wrap">
+          <label>Designation <input [(ngModel)]="leadForm.profile.designation" name="designation" /></label>
+          <label>Industry <input [(ngModel)]="leadForm.profile.industry" name="industry" /></label>
+        </div>
+        <label>Location <input [(ngModel)]="leadForm.profile.location" name="location" placeholder="City or area" /></label>
+        <label>Requirements <textarea [(ngModel)]="leadForm.profile.requirements" name="requirements" rows="2"></textarea></label>
+        <div class="row wrap">
+          <label>Expected purchase
+            <input type="date" [(ngModel)]="leadForm.profile.expectedPurchaseDate" name="expectedPurchase" />
+          </label>
+          <label>Next follow-up
+            <input type="date" [(ngModel)]="leadForm.profile.nextFollowUpDate" name="nextFollowUp" />
+          </label>
+        </div>
         <label>Source
           <select [(ngModel)]="leadForm.sourceCode" name="source">
             <option *ngFor="let s of leadSourceOptions" [value]="s.code">{{ s.label }}</option>
@@ -373,6 +387,7 @@
             <strong>{{ lead.title }}</strong>
             <p>{{ lead.displayName || lead.companyName || '—' }}</p>
             <p class="muted">{{ lead.ownerUserId || 'Unassigned' }}</p>
+            <p *ngIf="followUpOverdue(lead)"><span class="badge warn">Follow-up overdue</span></p>
             <p>
               <span [class]="scoreBandClass(lead.scoreBand)">{{ lead.score }} — {{ lead.scoreBand || '—' }}</span>
             </p>
@@ -409,6 +424,7 @@
                 <td>
                   <strong>{{ lead.title }}</strong>
                   <div class="muted">{{ lead.displayName || '—' }}</div>
+                  <span class="badge warn" *ngIf="followUpOverdue(lead)">Follow-up overdue</span>
                 </td>
                 <td>{{ lead.companyName || '—' }}</td>
                 <td>{{ lead.phone || '—' }}</td>
@@ -1505,6 +1521,18 @@
     <div><dt>Phone</dt><dd>{{ lead.phone || '—' }}</dd></div>
     <div><dt>Email</dt><dd>{{ lead.email || '—' }}</dd></div>
     <div><dt>Owner</dt><dd>{{ lead.ownerUserId || 'Unassigned' }}</dd></div>
+    <div><dt>Designation</dt><dd>{{ leadProfile(lead).designation || '—' }}</dd></div>
+    <div><dt>Industry</dt><dd>{{ leadProfile(lead).industry || '—' }}</dd></div>
+    <div><dt>Location</dt><dd>{{ leadProfile(lead).location || '—' }}</dd></div>
+    <div><dt>Requirements</dt><dd>{{ leadProfile(lead).requirements || '—' }}</dd></div>
+    <div><dt>Expected purchase</dt><dd>{{ leadProfile(lead).expectedPurchaseDate || '—' }}</dd></div>
+    <div>
+      <dt>Next follow-up</dt>
+      <dd>
+        {{ leadProfile(lead).nextFollowUpDate || '—' }}
+        <span class="badge warn" *ngIf="followUpOverdue(lead)">Overdue</span>
+      </dd>
+    </div>
     <div><dt>Source</dt><dd>{{ sourceLabel(lead.sourceCode) }}</dd></div>
     <div><dt>Campaign</dt><dd>{{ campaignName(lead.campaignId) }}</dd></div>
     <div><dt>UTM</dt><dd>{{ lead.utmSource || '—' }} / {{ lead.utmMedium || '—' }} / {{ lead.utmCampaign || '—' }}</dd></div>
@@ -1521,6 +1549,20 @@
       <label>Company <input [(ngModel)]="editLeadForm.companyName" name="editCompany" /></label>
       <label>Phone <input [(ngModel)]="editLeadForm.phone" name="editPhone" /></label>
       <label>Email <input type="email" [(ngModel)]="editLeadForm.email" name="editEmail" /></label>
+      <div class="row wrap">
+        <label>Designation <input [(ngModel)]="editLeadForm.profile.designation" name="editDesignation" /></label>
+        <label>Industry <input [(ngModel)]="editLeadForm.profile.industry" name="editIndustry" /></label>
+      </div>
+      <label>Location <input [(ngModel)]="editLeadForm.profile.location" name="editLocation" /></label>
+      <label>Requirements <textarea [(ngModel)]="editLeadForm.profile.requirements" name="editRequirements" rows="2"></textarea></label>
+      <div class="row wrap">
+        <label>Expected purchase
+          <input type="date" [(ngModel)]="editLeadForm.profile.expectedPurchaseDate" name="editExpectedPurchase" />
+        </label>
+        <label>Next follow-up
+          <input type="date" [(ngModel)]="editLeadForm.profile.nextFollowUpDate" name="editNextFollowUp" />
+        </label>
+      </div>
       <label>Source
         <select [(ngModel)]="editLeadForm.sourceCode" name="editSource">
           <option value="">—</option>

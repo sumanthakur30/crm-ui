@@ -2,6 +2,13 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { CrmApiService } from './core/crm-api.service';
+import {
+  emptyLeadProfile,
+  isFollowUpOverdue,
+  LeadProfileFields,
+  mergeLeadProfile,
+  readLeadProfile,
+} from './core/lead-profile';
 import { TenantService } from './core/tenant.service';
 import { AuthSessionService } from './core/auth-session.service';
 import { CrmModuleId, CrmNavService } from './core/crm-nav.service';
@@ -129,6 +136,7 @@ export class AppComponent implements OnInit, OnDestroy {
     amount: null as number | null,
     currency: 'INR',
     ownerUserId: '',
+    profile: emptyLeadProfile(),
   };
 
   /** Edit form bound in lead drawer (PUT /leads/{id}). */
@@ -141,6 +149,7 @@ export class AppComponent implements OnInit, OnDestroy {
     sourceCode: '',
     priority: 'MEDIUM',
     status: 'OPEN',
+    profile: emptyLeadProfile(),
   };
   editingLead = false;
 
@@ -195,6 +204,11 @@ export class AppComponent implements OnInit, OnDestroy {
     { code: 'WALKIN', label: 'Walk-in' },
     { code: 'WEBSITE', label: 'Website' },
     { code: 'REFERRAL', label: 'Referral' },
+    { code: 'WHATSAPP', label: 'WhatsApp' },
+    { code: 'CAMPAIGN', label: 'Campaign' },
+    { code: 'AD', label: 'Advertisement' },
+    { code: 'MARKETPLACE', label: 'Marketplace' },
+    { code: 'MANUAL', label: 'Manual entry' },
   ];
   showCreateLead = false;
   showCreateMore = false;
@@ -912,6 +926,7 @@ export class AppComponent implements OnInit, OnDestroy {
         amount: this.leadForm.amount,
         currency: this.leadForm.currency || null,
         ownerUserId: this.leadForm.ownerUserId || null,
+        attributes: mergeLeadProfile(null, this.leadForm.profile),
       })
       .subscribe({
         next: (lead) => {
@@ -935,6 +950,7 @@ export class AppComponent implements OnInit, OnDestroy {
             amount: null,
             currency: 'INR',
             ownerUserId: '',
+            profile: emptyLeadProfile(),
           };
           this.loadLeads();
           this.openLead(lead);
@@ -1474,6 +1490,21 @@ export class AppComponent implements OnInit, OnDestroy {
     return true;
   }
 
+  leadProfile(lead: Lead): LeadProfileFields {
+    return readLeadProfile(lead.attributes);
+  }
+
+  followUpOverdue(lead: Lead): boolean {
+    return isFollowUpOverdue(this.leadProfile(lead).nextFollowUpDate, this.todayIso());
+  }
+
+  private todayIso(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+
   scoreBandClass(band: string | null | undefined): string {
     const b = (band || '').toUpperCase();
     if (b === 'HOT') {
@@ -1776,6 +1807,7 @@ export class AppComponent implements OnInit, OnDestroy {
       sourceCode: lead.sourceCode || '',
       priority: lead.priority || 'MEDIUM',
       status: lead.status || 'OPEN',
+      profile: readLeadProfile(lead.attributes),
     };
   }
 
@@ -1817,6 +1849,7 @@ export class AppComponent implements OnInit, OnDestroy {
         accountId: this.selectedLead.accountId ?? null,
         contactId: this.selectedLead.contactId ?? null,
         campaignId: this.selectedLead.campaignId ?? null,
+        attributes: mergeLeadProfile(this.selectedLead.attributes, this.editLeadForm.profile),
       })
       .subscribe({
         next: (lead) => {
