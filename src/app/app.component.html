@@ -1841,9 +1841,7 @@
   <section *ngIf="leadDrawerTab === 'shop'">
     <h3>Convert to shop</h3>
     <p class="hint">
-      Creates a Retail <strong>customer</strong> (user-service) or Field Force lead — not an order.
-      Pilot default uses local sink; set <code>CRM_CONVERT_SHOP_URL</code> to
-      <code>http://localhost:8084/api/v1/customers/from-crm</code> for live.
+      Adds this person to the shop customer list for this outlet. A call, a note, or moving the deal to Won does not do that.
     </p>
     <select class="full" [(ngModel)]="convertTarget" name="convTarget">
       <option value="SHOP_CUSTOMER">Shop customer (user-service)</option>
