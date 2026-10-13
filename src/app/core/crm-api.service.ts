@@ -591,6 +591,10 @@ export class CrmApiService {
     return this.http.post(`${this.base}/accounts/${id}/notes`, { body });
   }
 
+  addOpportunityNote(id: number, body: string): Observable<unknown> {
+    return this.http.post(`${this.base}/opportunities/${id}/notes`, { body });
+  }
+
   upsertAccount(body: Partial<CrmAccount> & { name: string }): Observable<CrmAccount> {
     return this.http.post<CrmAccount>(`${this.base}/accounts`, body);
   }

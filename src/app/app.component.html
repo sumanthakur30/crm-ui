@@ -2256,6 +2256,12 @@
   </section>
 
   <section>
+    <h3>Add note</h3>
+    <textarea [(ngModel)]="oppNoteDraft" name="dealNote" rows="3" placeholder="Deal note…"></textarea>
+    <button type="button" class="btn" [disabled]="busy || !oppNoteDraft.trim()" (click)="addDealNote()">Save note</button>
+  </section>
+
+  <section>
     <h3>Timeline</h3>
     <ul class="timeline">
       <li *ngFor="let item of oppTimeline">

@@ -98,6 +98,7 @@ export class AppComponent implements OnInit, OnDestroy {
   selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
   oppTimeline: TimelineItem[] = [];
+  oppNoteDraft = '';
   noteDraft = '';
   messageForm = {
     channel: 'WHATSAPP' as 'WHATSAPP' | 'SMS' | 'EMAIL',
@@ -1906,6 +1907,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.oppFollowUpDate = readLeadProfile(opp.attributes).nextFollowUpDate;
     this.meetingWhen = '';
     this.callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
+    this.oppNoteDraft = '';
     this.loadOppTimeline(opp.id);
     this.selectedLead = null;
     this.selectedQuote = null;
@@ -1918,6 +1920,27 @@ export class AppComponent implements OnInit, OnDestroy {
     this.oppFollowUpDate = '';
     this.quotations = [];
     this.oppTimeline = [];
+    this.oppNoteDraft = '';
+  }
+
+  addDealNote(): void {
+    if (!this.selectedOpp || !this.oppNoteDraft.trim()) {
+      return;
+    }
+    this.busy = true;
+    this.api.addOpportunityNote(this.selectedOpp.id, this.oppNoteDraft.trim()).subscribe({
+      next: () => {
+        this.busy = false;
+        this.oppNoteDraft = '';
+        this.message = 'Note added';
+        this.error = '';
+        this.loadOppTimeline(this.selectedOpp!.id);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not add the note');
+      },
+    });
   }
 
   loadOppTimeline(opportunityId: number): void {
