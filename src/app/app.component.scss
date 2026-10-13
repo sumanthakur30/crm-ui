@@ -411,6 +411,13 @@ code {
   text-align: left;
 }
 
+.follow-close {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
 @media (max-width: 1000px) {
   .grid-3,
   .week-grid {

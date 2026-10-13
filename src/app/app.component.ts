@@ -2239,6 +2239,9 @@ export class AppComponent implements OnInit, OnDestroy {
   weekDays: Array<Record<string, unknown>> = [];
   weekLabel = '';
   calendarView: 'day' | 'week' | 'month' = 'week';
+  closingTaskId: number | null = null;
+  followUpNextDate = '';
+  followUpNote = '';
 
   loadMyDay(): void {
     this.loadCalendar();
@@ -2330,22 +2333,47 @@ export class AppComponent implements OnInit, OnDestroy {
     return 0;
   }
 
+  isFollowUpTask(task: Record<string, unknown>): boolean {
+    const source = String(task['sourceCode'] || '');
+    return source === 'LEAD_FOLLOW_UP' || source === 'OPPORTUNITY_FOLLOW_UP';
+  }
+
+  beginFollowUpClose(task: Record<string, unknown>): void {
+    const taskId = Number(task['id']);
+    if (!taskId) {
+      return;
+    }
+    this.closingTaskId = taskId;
+    this.followUpNextDate = '';
+    this.followUpNote = '';
+  }
+
   completeMyDayTask(taskId: number): void {
     if (!taskId) {
       return;
     }
+    const scheduling = this.closingTaskId === taskId;
+    const nextFollowUpDate = scheduling ? this.followUpNextDate.trim() : '';
+    const note = scheduling ? this.followUpNote.trim() : '';
     this.busy = true;
-    this.api.completeTask(taskId).subscribe({
-      next: () => {
-        this.busy = false;
-        this.message = `Task #${taskId} done`;
-        this.loadMyDay();
-      },
-      error: (err) => {
-        this.busy = false;
-        this.setError(err, 'Complete task failed');
-      },
-    });
+    this.api
+      .completeTask(taskId, scheduling ? { nextFollowUpDate: nextFollowUpDate || undefined, note: note || undefined } : undefined)
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.closingTaskId = null;
+          this.followUpNextDate = '';
+          this.followUpNote = '';
+          this.message = nextFollowUpDate
+            ? `Follow-up closed. Next one is ${nextFollowUpDate}.`
+            : `Task #${taskId} done`;
+          this.loadMyDay();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Complete task failed');
+        },
+      });
   }
 
   openMyDayLead(leadId: number): void {

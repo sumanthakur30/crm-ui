@@ -135,7 +135,9 @@
           <p *ngFor="let task of dayItems(day, 'tasks')">
             <button type="button" class="text-btn" (click)="openCalendarItem(task)">{{ task['title'] }}</button>
             <span class="muted">{{ task['relatedType'] }}</span>
-            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(task['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="!isFollowUpTask(task)" [disabled]="busy" (click)="completeMyDayTask(+$any(task['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="isFollowUpTask(task) && closingTaskId !== +$any(task['id'])" [disabled]="busy" (click)="beginFollowUpClose(task)">Done</button>
+            <ng-container *ngTemplateOutlet="followClose; context: { $implicit: task }"></ng-container>
           </p>
           <p *ngFor="let meeting of dayItems(day, 'meetings')">
             <button type="button" class="text-btn" (click)="openCalendarItem(meeting)">{{ meeting['title'] }}</button>
@@ -144,6 +146,13 @@
         </article>
       </div>
     </section>
+    <ng-template #followClose let-task>
+      <span class="follow-close" *ngIf="closingTaskId === +task['id']">
+        <input type="date" [(ngModel)]="followUpNextDate" [name]="'next-' + task['id']" />
+        <input type="text" [(ngModel)]="followUpNote" [name]="'note-' + task['id']" placeholder="What happened" maxlength="500" />
+        <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(task['id']))">Close follow-up</button>
+      </span>
+    </ng-template>
     <div class="grid-3">
       <section class="panel">
         <h2>Overdue <span class="badge warn">{{ myDayCount('overdueTasks') }}</span></h2>
@@ -151,7 +160,9 @@
           <li *ngFor="let t of myDayRows('overdueTasks')">
             <button type="button" class="text-btn" (click)="openCalendarItem(t)"><strong>{{ t['title'] }}</strong></button>
             <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }} · {{ $any(t['dueAt']) | date: 'short' }}</span>
-            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="!isFollowUpTask(t)" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="isFollowUpTask(t) && closingTaskId !== +$any(t['id'])" [disabled]="busy" (click)="beginFollowUpClose(t)">Done</button>
+            <ng-container *ngTemplateOutlet="followClose; context: { $implicit: t }"></ng-container>
           </li>
           <li *ngIf="!myDayRows('overdueTasks').length" class="muted">Nothing overdue.</li>
         </ul>
@@ -162,7 +173,9 @@
           <li *ngFor="let t of myDayRows('dueToday')">
             <button type="button" class="text-btn" (click)="openCalendarItem(t)"><strong>{{ t['title'] }}</strong></button>
             <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }}</span>
-            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="!isFollowUpTask(t)" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
+            <button type="button" class="btn" *ngIf="isFollowUpTask(t) && closingTaskId !== +$any(t['id'])" [disabled]="busy" (click)="beginFollowUpClose(t)">Done</button>
+            <ng-container *ngTemplateOutlet="followClose; context: { $implicit: t }"></ng-container>
           </li>
           <li *ngIf="!myDayRows('dueToday').length" class="muted">No tasks due today.</li>
         </ul>

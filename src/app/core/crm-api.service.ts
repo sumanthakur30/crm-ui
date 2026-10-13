@@ -227,8 +227,11 @@ export class CrmApiService {
     return this.http.get<Array<Record<string, unknown>>>(`${this.base}/tasks`);
   }
 
-  completeTask(id: number): Observable<Record<string, unknown>> {
-    return this.http.post<Record<string, unknown>>(`${this.base}/tasks/${id}/complete`, {});
+  completeTask(
+    id: number,
+    body?: { nextFollowUpDate?: string; note?: string }
+  ): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/tasks/${id}/complete`, body ?? {});
   }
 
   myDay(hotMinScore?: number, hotLimit?: number): Observable<Record<string, unknown>> {
