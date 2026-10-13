@@ -97,6 +97,7 @@ export class AppComponent implements OnInit, OnDestroy {
   selectedOpp: Opportunity | null = null;
   selectedQuote: Quotation | null = null;
   timeline: TimelineItem[] = [];
+  oppTimeline: TimelineItem[] = [];
   noteDraft = '';
   messageForm = {
     channel: 'WHATSAPP' as 'WHATSAPP' | 'SMS' | 'EMAIL',
@@ -1904,6 +1905,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.selectedOpp = opp;
     this.oppFollowUpDate = readLeadProfile(opp.attributes).nextFollowUpDate;
     this.meetingWhen = '';
+    this.callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
+    this.loadOppTimeline(opp.id);
     this.selectedLead = null;
     this.selectedQuote = null;
     this.quoteForm.opportunityId = opp.id;
@@ -1914,6 +1917,41 @@ export class AppComponent implements OnInit, OnDestroy {
     this.selectedOpp = null;
     this.oppFollowUpDate = '';
     this.quotations = [];
+    this.oppTimeline = [];
+  }
+
+  loadOppTimeline(opportunityId: number): void {
+    this.api.opportunityTimeline(opportunityId).subscribe({
+      next: (items) => (this.oppTimeline = items || []),
+      error: () => (this.oppTimeline = []),
+    });
+  }
+
+  logDealCall(): void {
+    if (!this.selectedOpp) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .logCall({
+        opportunityId: this.selectedOpp.id,
+        phone: this.callForm.phone,
+        outcome: this.callForm.outcome,
+        durationSec: this.callForm.durationSec,
+        direction: 'OUTBOUND',
+      })
+      .subscribe({
+        next: () => {
+          this.busy = false;
+          this.message = 'Call logged';
+          this.error = '';
+          this.loadOppTimeline(this.selectedOpp!.id);
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Call log failed');
+        },
+      });
   }
 
   dealFollowUp(opp: Opportunity): string {

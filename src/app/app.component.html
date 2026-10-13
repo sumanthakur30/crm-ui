@@ -2211,6 +2211,14 @@
       </dd>
     </div>
     <div>
+      <dt>Call</dt>
+      <dd>
+        <input [(ngModel)]="callForm.phone" name="dealCallPhone" placeholder="Phone" />
+        <input type="number" [(ngModel)]="callForm.durationSec" name="dealCallDur" />
+        <button type="button" class="btn" [disabled]="busy" (click)="logDealCall()">Log call</button>
+      </dd>
+    </div>
+    <div>
       <dt>Meeting</dt>
       <dd>
         <input [(ngModel)]="meetingTitle" name="dealMeetingTitle" placeholder="Title" />
@@ -2245,6 +2253,18 @@
       <strong>{{ ins['title'] }}</strong>
       <pre>{{ ins['body'] }}</pre>
     </div>
+  </section>
+
+  <section>
+    <h3>Timeline</h3>
+    <ul class="timeline">
+      <li *ngFor="let item of oppTimeline">
+        <span class="when">{{ item.occurredAt | date: 'short' }}</span>
+        <strong>{{ item.eventType }}</strong>
+        <p>{{ item.summary }}</p>
+      </li>
+      <li *ngIf="!oppTimeline.length" class="muted">No deal activity yet.</li>
+    </ul>
   </section>
 </aside>
 

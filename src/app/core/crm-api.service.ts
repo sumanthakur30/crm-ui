@@ -583,6 +583,10 @@ export class CrmApiService {
     return this.http.get<TimelineItem[]>(`${this.base}/accounts/${id}/timeline`);
   }
 
+  opportunityTimeline(id: number): Observable<TimelineItem[]> {
+    return this.http.get<TimelineItem[]>(`${this.base}/opportunities/${id}/timeline`);
+  }
+
   addAccountNote(id: number, body: string): Observable<unknown> {
     return this.http.post(`${this.base}/accounts/${id}/notes`, { body });
   }
