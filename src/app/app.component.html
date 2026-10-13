@@ -141,11 +141,20 @@
           </p>
           <p *ngFor="let meeting of dayItems(day, 'meetings')">
             <button type="button" class="text-btn" (click)="openCalendarItem(meeting)">{{ meeting['title'] }}</button>
+            <ng-container *ngTemplateOutlet="meetingChange; context: { $implicit: meeting }"></ng-container>
           </p>
           <p class="muted" *ngIf="!dayItems(day, 'tasks').length && !dayItems(day, 'meetings').length">—</p>
         </article>
       </div>
     </section>
+    <ng-template #meetingChange let-meeting>
+      <button type="button" class="btn" *ngIf="movingMeetingId !== +meeting['id']" [disabled]="busy" (click)="beginMoveMeeting(meeting)">Move</button>
+      <button type="button" class="btn" [disabled]="busy" (click)="cancelMeeting(+$any(meeting['id']))">Cancel</button>
+      <span class="follow-close" *ngIf="movingMeetingId === +meeting['id']">
+        <input type="datetime-local" [(ngModel)]="meetingMoveWhen" [name]="'move-' + meeting['id']" />
+        <button type="button" class="btn" [disabled]="busy" (click)="saveMovedMeeting(+$any(meeting['id']))">Save time</button>
+      </span>
+    </ng-template>
     <ng-template #followClose let-task>
       <span class="follow-close" *ngIf="closingTaskId === +task['id']">
         <input type="date" [(ngModel)]="followUpNextDate" [name]="'next-' + task['id']" />
@@ -184,8 +193,9 @@
         <h2>Meetings today <span class="badge">{{ myDayCount('meetingsToday') }}</span></h2>
         <ul class="member-list">
           <li *ngFor="let m of myDayRows('meetingsToday')">
-            <strong>{{ m['title'] }}</strong>
+            <button type="button" class="text-btn" (click)="openCalendarItem(m)"><strong>{{ m['title'] }}</strong></button>
             <span class="muted">{{ $any(m['startsAt']) | date: 'shortTime' }} · {{ m['relatedType'] }} #{{ m['relatedId'] }}</span>
+            <ng-container *ngTemplateOutlet="meetingChange; context: { $implicit: m }"></ng-container>
           </li>
           <li *ngIf="!myDayRows('meetingsToday').length" class="muted">No meetings scheduled today.</li>
         </ul>

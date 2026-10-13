@@ -510,6 +510,14 @@ export class CrmApiService {
     return this.http.post<Record<string, unknown>>(`${this.base}/ops/calendar`, body);
   }
 
+  rescheduleCalendar(id: number, startsAt: string): Observable<Record<string, unknown>> {
+    return this.http.put<Record<string, unknown>>(`${this.base}/ops/calendar/${id}`, { startsAt });
+  }
+
+  cancelCalendar(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.base}/ops/calendar/${id}/cancel`, {});
+  }
+
   runReports(): Observable<Record<string, unknown>> {
     return this.http.post<Record<string, unknown>>(`${this.base}/reports/run-due`, {});
   }

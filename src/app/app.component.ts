@@ -360,6 +360,8 @@ export class AppComponent implements OnInit, OnDestroy {
   callForm = { phone: '', outcome: 'CONNECTED', durationSec: 60 };
   meetingTitle = 'Discovery call';
   meetingWhen = '';
+  movingMeetingId: number | null = null;
+  meetingMoveWhen = '';
   adapterProvider: 'META' | 'GOOGLE' | 'MISSED_CALL' | 'CHATBOT' = 'META';
   adapterPhone = '';
   adapterName = '';
@@ -2991,6 +2993,53 @@ export class AppComponent implements OnInit, OnDestroy {
       });
   }
 
+  beginMoveMeeting(meeting: Record<string, unknown>): void {
+    this.movingMeetingId = Number(meeting['id']);
+    this.meetingMoveWhen = this.kolkataLocal(String(meeting['startsAt'] || ''));
+    this.error = '';
+  }
+
+  saveMovedMeeting(id: number): void {
+    const startsAt = this.kolkataInstant(this.meetingMoveWhen);
+    if (!startsAt) {
+      this.error = 'Choose the meeting date and time';
+      return;
+    }
+    this.busy = true;
+    this.api.rescheduleCalendar(id, startsAt).subscribe({
+      next: () => {
+        this.busy = false;
+        this.movingMeetingId = null;
+        this.message = `Meeting moved to ${this.meetingMoveWhen.replace('T', ' ')}`;
+        this.error = '';
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not move the meeting');
+      },
+    });
+  }
+
+  cancelMeeting(id: number): void {
+    this.busy = true;
+    this.api.cancelCalendar(id).subscribe({
+      next: () => {
+        this.busy = false;
+        if (this.movingMeetingId === id) {
+          this.movingMeetingId = null;
+        }
+        this.message = 'Meeting cancelled';
+        this.error = '';
+        this.loadMyDay();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not cancel the meeting');
+      },
+    });
+  }
+
   /** Wall-clock time from the picker, read as Asia/Kolkata so My Day shows that same day. */
   private kolkataInstant(localDateTime: string): string {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec((localDateTime || '').trim());
@@ -3004,6 +3053,24 @@ export class AppComponent implements OnInit, OnDestroy {
     const minute = Number(match[5]);
     const utcMillis = Date.UTC(year, month - 1, day, hour, minute) - (5 * 60 + 30) * 60 * 1000;
     return new Date(utcMillis).toISOString();
+  }
+
+  private kolkataLocal(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(date);
+    const value = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    return `${value('year')}-${value('month')}-${value('day')}T${value('hour')}:${value('minute')}`;
   }
 
   requestOppApproval(): void {
