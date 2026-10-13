@@ -1856,7 +1856,7 @@
     <button type="button" class="btn primary" [disabled]="busy" (click)="convertSelectedLead()">
       {{ convertEnabled ? 'Convert to ERP' : 'Store convert payload' }}
     </button>
-    <p class="hint" *ngIf="!convertEnabled">crm.convert.enabled=false — payload stored as SKIPPED only.</p>
+    <p class="hint" *ngIf="!convertEnabled">This shop's plan does not include convert. Super Admin can turn on FEATURE_CRM_CONVERT. Until then the payload is stored as SKIPPED.</p>
     <p class="hint" *ngIf="lastConvert as c">
       Last: {{ c['status'] }} · {{ c['mode'] || '—' }}
       <span *ngIf="c['externalId']"> · {{ c['externalId'] }}</span>
