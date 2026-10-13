@@ -2362,6 +2362,37 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  openCalendarItem(item: Record<string, unknown>): void {
+    const relatedId = Number(item['relatedId']);
+    const relatedType = String(item['relatedType'] || '');
+    if (!relatedId) {
+      return;
+    }
+    if (relatedType === 'LEAD') {
+      this.openMyDayLead(relatedId);
+      return;
+    }
+    if (relatedType === 'OPPORTUNITY') {
+      this.openMyDayDeal(relatedId);
+    }
+  }
+
+  lastFollowUpOn(record: { attributes?: Record<string, unknown> | null } | null): string {
+    const value = record?.attributes?.['lastFollowUpOn'];
+    return typeof value === 'string' ? value : '';
+  }
+
+  private openMyDayDeal(opportunityId: number): void {
+    this.api.getOpportunity(opportunityId).subscribe({
+      next: (opp) => {
+        void this.router.navigate(['/deals']);
+        this.applyModule('deals', true);
+        this.openOpp(opp);
+      },
+      error: (err) => this.setError(err, 'Open deal failed'),
+    });
+  }
+
   convertSelectedLead(): void {
     if (!this.selectedLead) {
       return;

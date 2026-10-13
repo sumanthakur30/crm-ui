@@ -401,6 +401,16 @@ code {
   font-size: 0.8rem;
 }
 
+.text-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
 @media (max-width: 1000px) {
   .grid-3,
   .week-grid {

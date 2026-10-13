@@ -133,10 +133,13 @@
         <article class="week-day" *ngFor="let day of weekDays" [class.muted]="day['inRange'] === false">
           <h3>{{ day['date'] }}</h3>
           <p *ngFor="let task of dayItems(day, 'tasks')">
-            {{ task['title'] }}
+            <button type="button" class="text-btn" (click)="openCalendarItem(task)">{{ task['title'] }}</button>
             <span class="muted">{{ task['relatedType'] }}</span>
+            <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(task['id']))">Done</button>
           </p>
-          <p class="muted" *ngFor="let meeting of dayItems(day, 'meetings')">{{ meeting['title'] }}</p>
+          <p *ngFor="let meeting of dayItems(day, 'meetings')">
+            <button type="button" class="text-btn" (click)="openCalendarItem(meeting)">{{ meeting['title'] }}</button>
+          </p>
           <p class="muted" *ngIf="!dayItems(day, 'tasks').length && !dayItems(day, 'meetings').length">—</p>
         </article>
       </div>
@@ -146,7 +149,7 @@
         <h2>Overdue <span class="badge warn">{{ myDayCount('overdueTasks') }}</span></h2>
         <ul class="member-list">
           <li *ngFor="let t of myDayRows('overdueTasks')">
-            <strong>{{ t['title'] }}</strong>
+            <button type="button" class="text-btn" (click)="openCalendarItem(t)"><strong>{{ t['title'] }}</strong></button>
             <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }} · {{ $any(t['dueAt']) | date: 'short' }}</span>
             <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
           </li>
@@ -157,7 +160,7 @@
         <h2>Due today <span class="badge">{{ myDayCount('dueToday') }}</span></h2>
         <ul class="member-list">
           <li *ngFor="let t of myDayRows('dueToday')">
-            <strong>{{ t['title'] }}</strong>
+            <button type="button" class="text-btn" (click)="openCalendarItem(t)"><strong>{{ t['title'] }}</strong></button>
             <span class="muted">{{ t['relatedType'] }} #{{ t['relatedId'] }}</span>
             <button type="button" class="btn" [disabled]="busy" (click)="completeMyDayTask(+$any(t['id']))">Done</button>
           </li>
@@ -1560,6 +1563,7 @@
       <dd>
         {{ leadProfile(lead).nextFollowUpDate || '—' }}
         <span class="badge warn" *ngIf="followUpOverdue(lead)">Overdue</span>
+        <span class="muted" *ngIf="lastFollowUpOn(lead)"> · completed {{ lastFollowUpOn(lead) }}</span>
       </dd>
     </div>
     <div><dt>Source</dt><dd>{{ sourceLabel(lead.sourceCode) }}</dd></div>
@@ -2173,6 +2177,7 @@
       <dd>
         <input type="date" [(ngModel)]="oppFollowUpDate" name="oppDrawerFollowUp" />
         <span class="badge warn" *ngIf="oppFollowUpOverdue(opp)">Overdue</span>
+        <span class="muted" *ngIf="lastFollowUpOn(opp)">Completed {{ lastFollowUpOn(opp) }}</span>
         <button type="button" class="btn" [disabled]="busy" (click)="saveOppFollowUp()">Save follow-up</button>
       </dd>
     </div>

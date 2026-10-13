@@ -124,6 +124,10 @@ export class CrmApiService {
     return this.http.post<ImportResult>(`${this.base}/leads/import`, form, { params });
   }
 
+  getOpportunity(id: number): Observable<Opportunity> {
+    return this.http.get<Opportunity>(`${this.base}/opportunities/${id}`);
+  }
+
   listOpportunities(q?: string, page = 0, size = 200): Observable<Page<Opportunity>> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (q?.trim()) {
