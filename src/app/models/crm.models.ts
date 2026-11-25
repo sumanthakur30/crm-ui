@@ -190,6 +190,32 @@ export interface IntegrationCard {
   reconnect?: string;
 }
 
+export interface MetaAsset {
+  id: number;
+  externalId: string;
+  name: string;
+  selected: boolean;
+  branchId?: number | null;
+  parentExternalId?: string | null;
+}
+
+export interface MetaField {
+  externalKey: string;
+  target: string;
+}
+
+export interface MetaDesk {
+  status: string;
+  healthy: boolean;
+  productionReady: boolean;
+  notice: string;
+  lastError?: string | null;
+  businesses: MetaAsset[];
+  pages: MetaAsset[];
+  forms: MetaAsset[];
+  fields: MetaField[];
+}
+
 export interface StatusResponse {
   service: string;
   phase: string;

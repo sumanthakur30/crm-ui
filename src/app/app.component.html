@@ -1113,7 +1113,51 @@
       <p class="hint" *ngIf="wizardResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
     </section>
 
-    <section class="panel" *ngIf="selectedIntegration !== 'WEBSITE' && selectedIntegration !== 'CSV'">
+    <section class="panel" *ngIf="selectedIntegration === 'META'">
+      <h2>Facebook Lead Ads</h2>
+      <p class="hint">A selected Facebook Page creates an enquiry from a lead ad. This is not WhatsApp.</p>
+      <p class="hint">Live pages stay off until Meta approves the app. A test lead from Meta's tool can arrive after you select a page.</p>
+      <p class="flash err" *ngIf="metaDesk?.lastError">{{ metaDesk?.lastError }}</p>
+      <p class="hint" *ngIf="metaDesk">{{ metaDesk.notice }}</p>
+      <button type="button" class="btn primary" [disabled]="busy" (click)="connectFacebook()">
+        {{ metaDesk?.status === 'ERROR' ? 'Reconnect' : 'Connect Facebook' }}
+      </button>
+      <div *ngIf="metaDesk?.businesses?.length">
+        <h3>Businesses</h3>
+        <p class="hint" *ngFor="let business of metaDesk?.businesses">{{ business.name }}</p>
+      </div>
+      <div *ngIf="metaDesk?.pages?.length">
+        <h3>Pages</h3>
+        <div class="row wrap" *ngFor="let page of metaDesk?.pages; let i = index">
+          <label><input type="checkbox" [(ngModel)]="page.selected" [name]="'metaPage' + i" /> {{ page.name }}</label>
+          <input type="number" [(ngModel)]="page.branchId" [name]="'metaPageBranch' + i" placeholder="Branch id" />
+        </div>
+      </div>
+      <div *ngIf="metaDesk?.forms?.length">
+        <h3>Lead forms</h3>
+        <div class="row wrap" *ngFor="let form of metaDesk?.forms; let i = index">
+          <label><input type="checkbox" [(ngModel)]="form.selected" [name]="'metaForm' + i" /> {{ form.name }}</label>
+          <input type="number" [(ngModel)]="form.branchId" [name]="'metaFormBranch' + i" placeholder="Branch id" />
+        </div>
+      </div>
+      <h3>Question map</h3>
+      <div class="row wrap" *ngFor="let field of metaFields; let i = index">
+        <input [(ngModel)]="field.externalKey" [name]="'metaKey' + i" placeholder="Question name" />
+        <select [(ngModel)]="field.target" [name]="'metaTarget' + i">
+          <option value="CONTACT_PHONE">Mobile</option>
+          <option value="CONTACT_EMAIL">Email</option>
+          <option value="CONTACT_NAME">Name</option>
+          <option value="LEAD_TITLE">Title</option>
+          <option value="COURSE">Course</option>
+          <option value="STORE_ONLY">Keep on the touch</option>
+        </select>
+      </div>
+      <button type="button" class="btn" [disabled]="busy || !metaDesk || metaDesk.status === 'DISCONNECTED'" (click)="saveMetaSelection()">
+        Save page selection
+      </button>
+    </section>
+
+    <section class="panel" *ngIf="selectedIntegration !== 'WEBSITE' && selectedIntegration !== 'CSV' && selectedIntegration !== 'META'">
       <h2>{{ selectedIntegration }}</h2>
       <p class="hint">This connection is not set up. The test inject below is a sample post, not this provider.</p>
     </section>

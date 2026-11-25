@@ -15,6 +15,8 @@ import {
   ImportPreview,
   ImportResult,
   IntegrationCard,
+  MetaDesk,
+  MetaField,
   WebForm,
   Lead,
   LeadUpsert,
@@ -192,6 +194,22 @@ export class CrmApiService {
 
   listIntegrations(): Observable<IntegrationCard[]> {
     return this.http.get<IntegrationCard[]>(`${this.base}/integrations`);
+  }
+
+  metaConnect(): Observable<{ authorizeUrl: string }> {
+    return this.http.get<{ authorizeUrl: string }>(`${this.base}/integrations/meta/connect`);
+  }
+
+  metaDesk(): Observable<MetaDesk> {
+    return this.http.get<MetaDesk>(`${this.base}/integrations/meta`);
+  }
+
+  saveMetaSelection(body: {
+    pages: Array<{ externalId: string; selected: boolean; branchId?: number | null }>;
+    forms: Array<{ externalId: string; selected: boolean; branchId?: number | null }>;
+    fields: MetaField[];
+  }): Observable<MetaDesk> {
+    return this.http.put<MetaDesk>(`${this.base}/integrations/meta/selection`, body);
   }
 
   listWebForms(): Observable<WebForm[]> {

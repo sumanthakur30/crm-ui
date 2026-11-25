@@ -26,6 +26,8 @@ import {
   ImportResult,
   IntegrationCard,
   Lead,
+  MetaDesk,
+  MetaField,
   WebForm,
   Opportunity,
   Pipeline,
@@ -444,6 +446,12 @@ export class AppComponent implements OnInit, OnDestroy {
   importPreview: ImportPreview | null = null;
   importColumnMap: Record<string, string> = {};
   wizardResult: ImportResult | null = null;
+  metaDesk: MetaDesk | null = null;
+  metaFields: MetaField[] = [
+    { externalKey: 'phone_number', target: 'CONTACT_PHONE' },
+    { externalKey: 'full_name', target: 'CONTACT_NAME' },
+    { externalKey: 'email', target: 'CONTACT_EMAIL' },
+  ];
 
   busy = false;
   message = '';
@@ -3884,10 +3892,20 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   loadIntegrations(): void {
+    const meta = new URLSearchParams(window.location.search).get('meta');
+    if (meta === 'connected') {
+      this.selectedIntegration = 'META';
+      this.message =
+        'Facebook account linked. Select a page. A test lead has not arrived yet, and live pages stay off until Meta approves the app.';
+    } else if (meta === 'error') {
+      this.selectedIntegration = 'META';
+      this.error = 'Facebook connection did not finish. Connect again.';
+    }
     this.api.listIntegrations().subscribe({
       next: (cards) => (this.integrationCards = cards || []),
       error: (err) => this.setError(err, 'Could not load integrations'),
     });
+    this.loadMetaDesk();
     this.api.listWebForms().subscribe({
       next: (forms) => (this.webForms = forms || []),
       error: (err) => this.setError(err, 'Could not load forms'),
@@ -3896,6 +3914,69 @@ export class AppComponent implements OnInit, OnDestroy {
       next: (events) => (this.adapterEvents = events || []),
       error: () => (this.adapterEvents = []),
     });
+  }
+
+  loadMetaDesk(): void {
+    this.api.metaDesk().subscribe({
+      next: (desk) => {
+        this.metaDesk = desk;
+        if (desk.fields && desk.fields.length) {
+          this.metaFields = desk.fields.map((field) => ({ ...field }));
+        }
+      },
+      error: () => (this.metaDesk = null),
+    });
+  }
+
+  connectFacebook(): void {
+    this.busy = true;
+    this.api.metaConnect().subscribe({
+      next: (link) => {
+        this.busy = false;
+        const url = link && link.authorizeUrl ? link.authorizeUrl : '';
+        if (!url || /access_token|ciphertext|app_secret/i.test(url)) {
+          this.error = 'Facebook connect link is not usable';
+          return;
+        }
+        window.location.assign(url);
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not start Facebook login');
+      },
+    });
+  }
+
+  saveMetaSelection(): void {
+    if (!this.metaDesk) {
+      return;
+    }
+    this.busy = true;
+    const choice = (asset: { externalId: string; selected: boolean; branchId?: number | null }) => ({
+      externalId: asset.externalId,
+      selected: !!asset.selected,
+      branchId: asset.branchId || null,
+    });
+    this.api
+      .saveMetaSelection({
+        pages: (this.metaDesk.pages || []).map(choice),
+        forms: (this.metaDesk.forms || []).map(choice),
+        fields: this.metaFields.filter((field) => field.externalKey.trim()),
+      })
+      .subscribe({
+        next: (desk) => {
+          this.busy = false;
+          this.metaDesk = desk;
+          this.message = desk.lastError
+            ? desk.lastError
+            : 'Page selection saved. A test lead from Meta can arrive. Live pages stay off until Meta approves the app.';
+          this.loadIntegrations();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Could not save the Facebook page');
+        },
+      });
   }
 
   createWebForm(): void {
