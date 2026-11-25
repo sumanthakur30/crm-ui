@@ -22,8 +22,11 @@ import {
   CrmTag,
   EntitlementsSnapshot,
   FieldForceEmbedConfig,
+  ImportPreview,
   ImportResult,
+  IntegrationCard,
   Lead,
+  WebForm,
   Opportunity,
   Pipeline,
   Quotation,
@@ -423,6 +426,24 @@ export class AppComponent implements OnInit, OnDestroy {
   importFile: File | null = null;
   importResult: ImportResult | null = null;
   assignRoundRobin = false;
+  integrationCards: IntegrationCard[] = [];
+  webForms: WebForm[] = [];
+  selectedIntegration = 'WEBSITE';
+  formDraft = {
+    name: '',
+    defaultCourse: '',
+    campaignId: null as number | null,
+    fields: [
+      { externalKey: 'phone', target: 'CONTACT_PHONE' },
+      { externalKey: 'email', target: 'CONTACT_EMAIL' },
+      { externalKey: 'name', target: 'CONTACT_NAME' },
+      { externalKey: 'course', target: 'COURSE' },
+    ],
+  };
+  wizardFile: File | null = null;
+  importPreview: ImportPreview | null = null;
+  importColumnMap: Record<string, string> = {};
+  wizardResult: ImportResult | null = null;
 
   busy = false;
   message = '';
@@ -635,6 +656,9 @@ export class AppComponent implements OnInit, OnDestroy {
     } else if (m === 'accounts') {
       this.loadAccounts();
     } else if (m === 'campaigns') {
+      this.loadCampaigns();
+    } else if (m === 'integrations') {
+      this.loadIntegrations();
       this.loadCampaigns();
     } else if (m === 'ops') {
       this.loadOps();
@@ -3857,6 +3881,110 @@ export class AppComponent implements OnInit, OnDestroy {
     const input = event.target as HTMLInputElement;
     this.importFile = input.files && input.files.length ? input.files[0] : null;
     this.importResult = null;
+  }
+
+  loadIntegrations(): void {
+    this.api.listIntegrations().subscribe({
+      next: (cards) => (this.integrationCards = cards || []),
+      error: (err) => this.setError(err, 'Could not load integrations'),
+    });
+    this.api.listWebForms().subscribe({
+      next: (forms) => (this.webForms = forms || []),
+      error: (err) => this.setError(err, 'Could not load forms'),
+    });
+    this.api.adapterEvents().subscribe({
+      next: (events) => (this.adapterEvents = events || []),
+      error: () => (this.adapterEvents = []),
+    });
+  }
+
+  createWebForm(): void {
+    if (!this.formDraft.name.trim()) {
+      this.error = 'Form name is required';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .createWebForm({
+        name: this.formDraft.name.trim(),
+        campaignId: this.formDraft.campaignId,
+        defaultCourse: this.formDraft.defaultCourse.trim() || null,
+        fields: this.formDraft.fields.filter((field) => field.externalKey.trim()),
+      })
+      .subscribe({
+        next: (form) => {
+          this.busy = false;
+          this.message = `Form saved. It stays in test until you activate it. ${form.capturePath}`;
+          this.formDraft.name = '';
+          this.formDraft.defaultCourse = '';
+          this.loadIntegrations();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Could not save the form');
+        },
+      });
+  }
+
+  activateWebForm(form: WebForm): void {
+    this.busy = true;
+    this.api.activateWebForm(form.id).subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = `${form.name} is active`;
+        this.loadIntegrations();
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not activate the form');
+      },
+    });
+  }
+
+  onWizardFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.wizardFile = input.files && input.files.length ? input.files[0] : null;
+    this.importPreview = null;
+    this.wizardResult = null;
+    this.importColumnMap = {};
+  }
+
+  previewWizard(): void {
+    if (!this.wizardFile) {
+      this.error = 'Choose a CSV file first';
+      return;
+    }
+    this.busy = true;
+    this.api.previewImport(this.wizardFile).subscribe({
+      next: (preview) => {
+        this.busy = false;
+        this.importPreview = preview;
+        this.importColumnMap = { ...(preview.suggestedMap || {}) };
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not preview the file');
+      },
+    });
+  }
+
+  commitWizard(): void {
+    if (!this.wizardFile) {
+      this.error = 'Choose a CSV file first';
+      return;
+    }
+    this.busy = true;
+    this.api.commitImport(this.wizardFile, this.importColumnMap, this.assignRoundRobin).subscribe({
+      next: (result) => {
+        this.busy = false;
+        this.wizardResult = result;
+        this.message = `Import: ${result.created} created, ${result.skipped} skipped`;
+      },
+      error: (err) => {
+        this.busy = false;
+        this.setError(err, 'Could not commit the file');
+      },
+    });
   }
 
   uploadImport(): void {

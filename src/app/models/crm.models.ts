@@ -147,6 +147,49 @@ export interface ImportResult {
   errors: string[];
 }
 
+export interface ImportPreview {
+  headers: string[];
+  suggestedMap: Record<string, string>;
+  totalRows: number;
+  sampleRows: Array<Record<string, string>>;
+  errors: string[];
+}
+
+export interface WebFormField {
+  id?: number;
+  externalKey: string;
+  target: string;
+  required?: boolean;
+}
+
+export interface WebForm {
+  id: number;
+  name: string;
+  publicKey: string;
+  status: string;
+  branchId?: number | null;
+  campaignId?: number | null;
+  defaultCourse?: string | null;
+  honeypotField?: string;
+  capturePath: string;
+  fields: WebFormField[];
+  createdAt?: string;
+}
+
+export interface IntegrationCard {
+  provider: string;
+  status: string;
+  displayName: string;
+  summary: string;
+  selectedAssets: number;
+  assetNames: string[];
+  lastSuccessAt?: string | null;
+  leadsLast7Days: number;
+  failedCount: number;
+  lastError?: string | null;
+  reconnect?: string;
+}
+
 export interface StatusResponse {
   service: string;
   phase: string;

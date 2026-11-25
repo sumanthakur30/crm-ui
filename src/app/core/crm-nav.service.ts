@@ -8,6 +8,7 @@ export type CrmModuleId =
   | 'quotes'
   | 'insights'
   | 'campaigns'
+  | 'integrations'
   | 'accounts'
   | 'ops'
   | 'cases'
@@ -21,6 +22,7 @@ export const CRM_MODULES: CrmModuleId[] = [
   'insights',
   'accounts',
   'campaigns',
+  'integrations',
   'ops',
   'cases',
   'enterprise',

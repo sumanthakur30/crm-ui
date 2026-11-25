@@ -72,6 +72,14 @@
         >
           Campaigns
         </a>
+        <a
+          routerLink="/integrations"
+          routerLinkActive="primary"
+          class="btn"
+          [class.primary]="module === 'integrations'"
+        >
+          Integrations
+        </a>
         <a routerLink="/ops" routerLinkActive="primary" class="btn" [class.primary]="module === 'ops'">Ops</a>
         <a
           *ngIf="can('cases')"
@@ -401,6 +409,7 @@
           Round-robin after import
         </label>
         <button type="button" class="btn" [disabled]="busy || !importFile" (click)="uploadImport()">Upload</button>
+        <p class="hint">Column mapping is on Integrations. This upload still uses the file headers.</p>
         <p class="hint" *ngIf="importResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
       </section>
       <section class="panel">
@@ -992,6 +1001,145 @@
     </div>
   </ng-container>
 
+  <!-- ========== INTEGRATIONS ========== -->
+  <ng-container *ngIf="module === 'integrations'">
+    <section class="panel">
+      <h2>Integrations</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Connection</th>
+              <th>Status</th>
+              <th>Selected</th>
+              <th>Last 7 days</th>
+              <th>Failed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let card of integrationCards" (click)="selectedIntegration = card.provider">
+              <td>
+                <strong>{{ card.displayName }}</strong>
+                <div class="muted">{{ card.summary }}</div>
+              </td>
+              <td><span class="badge">{{ card.status }}</span></td>
+              <td>{{ card.selectedAssets }}</td>
+              <td>{{ card.leadsLast7Days }}</td>
+              <td>{{ card.failedCount }} <span class="muted" *ngIf="card.lastError">{{ card.lastError }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" *ngIf="selectedIntegration === 'WEBSITE'">
+      <h2>Website form</h2>
+      <p class="hint">Posts to the existing capture link. A new form starts in test. Activate it when the page is ready.</p>
+      <form class="form" (ngSubmit)="createWebForm()">
+        <label>Name * <input required [(ngModel)]="formDraft.name" name="formName" placeholder="Admission enquiry" /></label>
+        <label>Default course <input [(ngModel)]="formDraft.defaultCourse" name="formCourse" /></label>
+        <label>Campaign
+          <select [(ngModel)]="formDraft.campaignId" name="formCampaign">
+            <option [ngValue]="null">None</option>
+            <option *ngFor="let c of campaigns" [ngValue]="c.id">{{ c.name }}</option>
+          </select>
+        </label>
+        <div class="row wrap" *ngFor="let field of formDraft.fields; let i = index">
+          <input [(ngModel)]="field.externalKey" [name]="'fieldKey' + i" placeholder="Field name on the form" />
+          <select [(ngModel)]="field.target" [name]="'fieldTarget' + i">
+            <option value="CONTACT_PHONE">Mobile</option>
+            <option value="CONTACT_EMAIL">Email</option>
+            <option value="CONTACT_NAME">Name</option>
+            <option value="LEAD_TITLE">Title</option>
+            <option value="COURSE">Course</option>
+            <option value="STORE_ONLY">Keep on the touch</option>
+          </select>
+        </div>
+        <button type="submit" class="btn primary" [disabled]="busy">Save form</button>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Form</th>
+              <th>Status</th>
+              <th>Capture path</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let form of webForms">
+              <td>{{ form.name }}</td>
+              <td><span class="badge">{{ form.status }}</span></td>
+              <td class="muted">{{ form.capturePath }}</td>
+              <td>
+                <button type="button" class="btn" *ngIf="form.status !== 'ACTIVE'" [disabled]="busy" (click)="activateWebForm(form)">
+                  Activate
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="!webForms.length">
+              <td colspan="4" class="empty">No website forms yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" *ngIf="selectedIntegration === 'CSV'">
+      <h2>CSV import</h2>
+      <p class="hint">Upload, map columns, preview errors, then commit. A row that matches an existing mobile is skipped.</p>
+      <input type="file" accept=".csv,.txt,.xlsx" (change)="onWizardFile($event)" />
+      <div class="row wrap">
+        <button type="button" class="btn" [disabled]="busy || !wizardFile" (click)="previewWizard()">Preview</button>
+        <button type="button" class="btn primary" [disabled]="busy || !importPreview" (click)="commitWizard()">Commit</button>
+      </div>
+      <div *ngIf="importPreview as preview">
+        <p class="hint">{{ preview.totalRows }} rows</p>
+        <p class="flash err" *ngFor="let err of preview.errors">{{ err }}</p>
+        <div class="row wrap" *ngFor="let header of preview.headers">
+          <span>{{ header }}</span>
+          <select [(ngModel)]="importColumnMap[header]" [name]="'map' + header">
+            <option value="title">Name</option>
+            <option value="displayName">Contact name</option>
+            <option value="phone">Mobile</option>
+            <option value="email">Email</option>
+            <option value="course">Course</option>
+            <option value="source">Source</option>
+            <option value="ignore">Ignore</option>
+          </select>
+        </div>
+      </div>
+      <p class="hint" *ngIf="wizardResult as r">{{ r.created }} created · {{ r.skipped }} skipped</p>
+    </section>
+
+    <section class="panel" *ngIf="selectedIntegration !== 'WEBSITE' && selectedIntegration !== 'CSV'">
+      <h2>{{ selectedIntegration }}</h2>
+      <p class="hint">This connection is not set up. The test inject below is a sample post, not this provider.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Test inject</h2>
+      <p class="hint">Posts a sample enquiry. This is not the Facebook Lead Ads card.</p>
+      <select [(ngModel)]="adapterProvider" name="adProv">
+        <option value="META">Meta</option>
+        <option value="GOOGLE">Google</option>
+        <option value="MISSED_CALL">Missed call</option>
+        <option value="CHATBOT">Chatbot</option>
+      </select>
+      <input [(ngModel)]="adapterName" name="adName" placeholder="Name" />
+      <input [(ngModel)]="adapterPhone" name="adPhone" placeholder="Phone" />
+      <button type="button" class="btn" (click)="runAdapter()">Send sample</button>
+      <ul class="member-list">
+        <li *ngFor="let e of adapterEvents">
+          <strong>{{ e['provider'] }}</strong>
+          <span class="badge">{{ e['status'] }}</span>
+          <span class="muted">lead {{ e['leadId'] || '—' }}</span>
+        </li>
+      </ul>
+    </section>
+  </ng-container>
+
   <!-- ========== CAMPAIGNS ========== -->
   <ng-container *ngIf="module === 'campaigns'">
     <div class="grid-2">
@@ -1378,25 +1526,8 @@
         </ul>
       </section>
       <section class="panel">
-        <h2>Inbound adapters</h2>
-        <select [(ngModel)]="adapterProvider" name="adProv">
-          <option value="META">Meta</option>
-          <option value="GOOGLE">Google</option>
-          <option value="MISSED_CALL">Missed call</option>
-          <option value="CHATBOT">Chatbot</option>
-        </select>
-        <input [(ngModel)]="adapterName" name="adName" placeholder="Name" />
-        <input [(ngModel)]="adapterPhone" name="adPhone" placeholder="Phone" />
-        <p class="hint">Meta/Google use campaign public key when set on Campaigns tab.</p>
-        <p class="hint">Inbound signing: {{ inboundSigningEnabled ? 'on' : 'off' }}</p>
-        <button type="button" class="btn primary" (click)="runAdapter()">Ingest</button>
-        <ul class="member-list">
-          <li *ngFor="let e of adapterEvents">
-            <strong>{{ e['provider'] }}</strong>
-            <span class="badge">{{ e['status'] }}</span>
-            <span class="muted">lead {{ e['leadId'] || '—' }}</span>
-          </li>
-        </ul>
+        <h2>Test inject</h2>
+        <p class="hint">The sample post now lives on Integrations, separate from the Facebook card.</p>
       </section>
     </div>
   </ng-container>

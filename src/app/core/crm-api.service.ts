@@ -12,7 +12,10 @@ import {
   CrmTag,
   EntitlementsSnapshot,
   FieldForceEmbedConfig,
+  ImportPreview,
   ImportResult,
+  IntegrationCard,
+  WebForm,
   Lead,
   LeadUpsert,
   Opportunity,
@@ -171,6 +174,41 @@ export class CrmApiService {
     form.append('file', file, file.name);
     const params = new HttpParams().set('assignRoundRobin', String(assignRoundRobin));
     return this.http.post<ImportResult>(`${this.base}/leads/import`, form, { params });
+  }
+
+  previewImport(file: File): Observable<ImportPreview> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post<ImportPreview>(`${this.base}/leads/imports/preview`, form);
+  }
+
+  commitImport(file: File, columnMap: Record<string, string>, assignRoundRobin = false): Observable<ImportResult> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    let params = new HttpParams().set('assignRoundRobin', String(assignRoundRobin));
+    params = params.set('columnMap', JSON.stringify(columnMap));
+    return this.http.post<ImportResult>(`${this.base}/leads/imports/commit`, form, { params });
+  }
+
+  listIntegrations(): Observable<IntegrationCard[]> {
+    return this.http.get<IntegrationCard[]>(`${this.base}/integrations`);
+  }
+
+  listWebForms(): Observable<WebForm[]> {
+    return this.http.get<WebForm[]>(`${this.base}/forms`);
+  }
+
+  createWebForm(body: {
+    name: string;
+    campaignId?: number | null;
+    defaultCourse?: string | null;
+    fields: Array<{ externalKey: string; target: string }>;
+  }): Observable<WebForm> {
+    return this.http.post<WebForm>(`${this.base}/forms`, body);
+  }
+
+  activateWebForm(id: number): Observable<WebForm> {
+    return this.http.post<WebForm>(`${this.base}/forms/${id}/activate`, {});
   }
 
   getOpportunity(id: number): Observable<Opportunity> {
