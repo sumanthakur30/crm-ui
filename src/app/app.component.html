@@ -3,7 +3,7 @@
     <span class="mark">SF</span>
     <div>
       <h1>SugamFlow CRM</h1>
-      <p class="tag">Phase 5 · Sprint 7 — omnichannel WA/SMS/Email</p>
+      <p class="tag">Leads, follow-ups, and pipeline</p>
     </div>
   </div>
   <div class="tenant-bar">
@@ -30,14 +30,8 @@
     <button type="button" class="btn primary" [disabled]="busy" (click)="login()">Sign in</button>
   </div>
   <p class="hint">
-    Demo: shopId <code>CRM-DEMO-01</code> · user <code>demo</code> · password <code>Demo@2026</code>.
-    Uses auth-service POST /api/v1/auth/login (Bearer required for /api/v1/crm/**).
+    Sign in with the shop id, username, and password from auth-service.
   </p>
-  <div class="row wrap">
-    <input [(ngModel)]="authUserDraft" name="authUser" placeholder="user id" style="max-width: 7rem" />
-    <input [(ngModel)]="authTokenDraft" name="authTok" placeholder="Bearer token (optional)" style="min-width: 12rem" />
-    <button type="button" class="btn" (click)="saveAuth()">Save token</button>
-  </div>
 </section>
 
 <main class="layout" [class.drawer-open]="!!selectedLead || !!selectedOpp || (module === 'accounts' && !!selectedAccount)">
@@ -249,8 +243,8 @@
         <p class="hint">Work the pipeline, then convert a lead into an account and deal. Shop billing uses Convert to shop.</p>
       </div>
       <div class="row wrap">
-        <input [(ngModel)]="searchQ" name="q" placeholder="Search name, phone, company" (keyup.enter)="loadLeads()" />
-        <button type="button" class="btn" (click)="loadLeads()">Search</button>
+        <input [(ngModel)]="searchQ" name="q" placeholder="Search name, phone, company" (keyup.enter)="searchLeads()" />
+        <button type="button" class="btn" (click)="searchLeads()">Search</button>
         <button type="button" class="btn" [class.primary]="showLeadFilters" (click)="showLeadFilters = !showLeadFilters">Filters</button>
         <button type="button" class="btn" (click)="showLeadTools = !showLeadTools">{{ showLeadTools ? 'Hide tools' : 'Import / team' }}</button>
         <button type="button" class="btn primary" (click)="showCreateLead = !showCreateLead">{{ showCreateLead ? 'Close form' : 'New lead' }}</button>
@@ -419,7 +413,12 @@
             <button type="button" class="btn" [class.primary]="view === 'list'" (click)="view = 'list'">List</button>
           </div>
         </div>
-        <p class="hint">{{ visibleLeads().length }} shown</p>
+        <p class="hint">{{ visibleLeads().length }} on this page · {{ totalLeads }} leads</p>
+        <div class="row wrap">
+          <button type="button" class="btn" (click)="prevLeadPage()" [disabled]="leadPage === 0 || busy">Previous</button>
+          <span class="muted">Page {{ leadPage + 1 }} of {{ leadTotalPages }}</span>
+          <button type="button" class="btn" (click)="nextLeadPage()" [disabled]="leadPage + 1 >= leadTotalPages || busy">Next</button>
+        </div>
       </div>
 
       <div class="kanban" *ngIf="view === 'kanban' && stages.length; else leadFallback">

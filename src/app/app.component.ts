@@ -70,6 +70,9 @@ export class AppComponent implements OnInit, OnDestroy {
   templateCode = 'RETAIL';
   templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
   searchQ = '';
+  leadPage = 0;
+  leadPageSize = 50;
+  leadTotalPages = 1;
   authTokenDraft = '';
   authUserDraft = '';
   loginShopId = 'CRM-DEMO-01';
@@ -666,7 +669,7 @@ export class AppComponent implements OnInit, OnDestroy {
       next: (res) => {
         this.busy = false;
         if (res.mfaRequired) {
-          this.error = 'MFA required — complete MFA in shop UI, then paste token here';
+          this.error = 'MFA required — complete MFA, then sign in again';
           return;
         }
         // Ensure token is persisted before any CRM reload (interceptor reads localStorage).
@@ -861,16 +864,39 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
+  searchLeads(): void {
+    this.leadPage = 0;
+    this.loadLeads();
+  }
+
+  prevLeadPage(): void {
+    if (this.leadPage === 0) {
+      return;
+    }
+    this.leadPage -= 1;
+    this.loadLeads();
+  }
+
+  nextLeadPage(): void {
+    if (this.leadPage + 1 >= this.leadTotalPages) {
+      return;
+    }
+    this.leadPage += 1;
+    this.loadLeads();
+  }
+
   loadLeads(): void {
     if (!this.auth.getAccessToken()) {
       this.setError({ status: 401, message: 'Sign in required' }, 'Sign in required before loading leads');
       this.showLogin = true;
       return;
     }
-    this.api.listLeads(this.searchQ).subscribe({
+    this.api.listLeads(this.searchQ, this.leadPage, this.leadPageSize).subscribe({
       next: (page) => {
         this.leads = page.content || [];
         this.totalLeads = page.totalElements ?? this.leads.length;
+        this.leadTotalPages = Math.max(1, page.totalPages || 1);
+        this.leadPage = page.number ?? this.leadPage;
         this.error = '';
         if (this.selectedLead) {
           const fresh = this.leads.find((l) => l.id === this.selectedLead!.id);

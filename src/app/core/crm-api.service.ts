@@ -66,7 +66,7 @@ export class CrmApiService {
     return this.http.get<Stage[]>(`${this.base}/pipelines/${pipelineId}/stages`);
   }
 
-  listLeads(q?: string, page = 0, size = 200): Observable<Page<Lead>> {
+  listLeads(q?: string, page = 0, size = 50): Observable<Page<Lead>> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (q?.trim()) {
       params = params.set('q', q.trim());
