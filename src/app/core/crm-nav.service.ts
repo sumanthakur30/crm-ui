@@ -30,6 +30,8 @@ export const CRM_MODULES: CrmModuleId[] = [
 export class CrmNavService {
   private readonly moduleSubject = new BehaviorSubject<CrmModuleId>('home');
   readonly module$ = this.moduleSubject.asObservable();
+  private readonly leadIdSubject = new BehaviorSubject<number | null>(null);
+  readonly leadId$ = this.leadIdSubject.asObservable();
 
   get module(): CrmModuleId {
     return this.moduleSubject.value;
@@ -38,6 +40,12 @@ export class CrmNavService {
   setModule(m: CrmModuleId): void {
     if (this.moduleSubject.value !== m) {
       this.moduleSubject.next(m);
+    }
+  }
+
+  selectLead(id: number | null): void {
+    if (this.leadIdSubject.value !== id) {
+      this.leadIdSubject.next(id);
     }
   }
 

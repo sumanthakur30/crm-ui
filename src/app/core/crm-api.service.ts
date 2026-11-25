@@ -66,12 +66,61 @@ export class CrmApiService {
     return this.http.get<Stage[]>(`${this.base}/pipelines/${pipelineId}/stages`);
   }
 
-  listLeads(q?: string, page = 0, size = 50): Observable<Page<Lead>> {
+  listLeads(
+    q?: string,
+    page = 0,
+    size = 50,
+    filters?: {
+      status?: string;
+      stageId?: number | null;
+      ownerUserId?: string;
+      sourceCode?: string;
+      followUp?: string;
+      unassigned?: boolean;
+      course?: string;
+    }
+  ): Observable<Page<Lead>> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (q?.trim()) {
       params = params.set('q', q.trim());
     }
+    if (filters?.status) {
+      params = params.set('status', filters.status);
+    }
+    if (filters?.stageId != null) {
+      params = params.set('stageId', filters.stageId);
+    }
+    if (filters?.ownerUserId) {
+      params = params.set('ownerUserId', filters.ownerUserId);
+    }
+    if (filters?.sourceCode) {
+      params = params.set('sourceCode', filters.sourceCode);
+    }
+    if (filters?.followUp) {
+      params = params.set('followUp', filters.followUp);
+    }
+    if (filters?.unassigned) {
+      params = params.set('unassigned', 'true');
+    }
+    if (filters?.course?.trim()) {
+      params = params.set('course', filters.course.trim());
+    }
     return this.http.get<Page<Lead>>(`${this.base}/leads`, { params });
+  }
+
+  logOutcome(
+    leadId: number,
+    body: { outcome: string; note?: string; nextFollowUpDate?: string | null; stageId?: number | null }
+  ): Observable<Lead> {
+    return this.http.post<Lead>(`${this.base}/leads/${leadId}/outcomes`, body);
+  }
+
+  bulkAssignLeads(body: {
+    leadIds: number[];
+    mode: string;
+    ownerUserId?: string | null;
+  }): Observable<{ assigned: number }> {
+    return this.http.post<{ assigned: number }>(`${this.base}/leads/bulk-assign`, body);
   }
 
   getLead(id: number): Observable<Lead> {

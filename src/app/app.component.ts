@@ -131,6 +131,7 @@ export class AppComponent implements OnInit, OnDestroy {
     email: '',
     phone: '',
     sourceCode: 'CALL',
+    course: '',
     campaignId: null as number | null,
     accountId: null as number | null,
     contactId: null as number | null,
@@ -222,6 +223,18 @@ export class AppComponent implements OnInit, OnDestroy {
   leadFilterStatus = '';
   leadFilterSource = '';
   leadFilterOwner = '';
+  leadFilterFollowUp = '';
+  leadFilterUnassigned = false;
+  leadFilterCourse = '';
+  selectedLeadIds: number[] = [];
+  bulkOwner = '';
+  showOutcome = false;
+  outcomeForm = {
+    outcome: 'NO_ANSWER',
+    note: '',
+    nextFollowUpDate: '',
+    stageId: null as number | null,
+  };
   leadFilterStageId: number | null = null;
   leadDrawerTab: 'overview' | 'convert' | 'activity' | 'shop' | 'more' = 'overview';
   convertStep = 1;
@@ -439,6 +452,18 @@ export class AppComponent implements OnInit, OnDestroy {
       } else {
         this.module = m;
       }
+    });
+    this.nav.leadId$.subscribe((id) => {
+      if (id == null) {
+        return;
+      }
+      if (this.selectedLead?.id === id) {
+        return;
+      }
+      this.api.getLead(id).subscribe({
+        next: (lead) => this.openLead(lead, true),
+        error: (err) => this.setError(err, 'Open lead failed'),
+      });
     });
     this.loadTemplates();
     this.loadFfEmbedConfig();
@@ -891,7 +916,17 @@ export class AppComponent implements OnInit, OnDestroy {
       this.showLogin = true;
       return;
     }
-    this.api.listLeads(this.searchQ, this.leadPage, this.leadPageSize).subscribe({
+    this.api
+      .listLeads(this.searchQ, this.leadPage, this.leadPageSize, {
+        status: this.leadFilterStatus,
+        stageId: this.leadFilterStageId,
+        ownerUserId: this.leadFilterOwner,
+        sourceCode: this.leadFilterSource,
+        followUp: this.leadFilterFollowUp,
+        unassigned: this.leadFilterUnassigned,
+        course: this.leadFilterCourse,
+      })
+      .subscribe({
       next: (page) => {
         this.leads = page.content || [];
         this.totalLeads = page.totalElements ?? this.leads.length;
@@ -963,7 +998,7 @@ export class AppComponent implements OnInit, OnDestroy {
         amount: this.leadForm.amount,
         currency: this.leadForm.currency || null,
         ownerUserId: this.leadForm.ownerUserId || null,
-        attributes: mergeLeadProfile(null, this.leadForm.profile),
+        attributes: this.leadAttributes(),
       })
       .subscribe({
         next: (lead) => {
@@ -977,6 +1012,7 @@ export class AppComponent implements OnInit, OnDestroy {
             email: '',
             phone: '',
             sourceCode: 'CALL',
+            course: '',
             campaignId: null,
             accountId: null,
             contactId: null,
@@ -1434,7 +1470,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   applyLeadFilters(): void {
-    this.rebuildLeadKanban();
+    this.searchLeads();
   }
 
   clearLeadFilters(): void {
@@ -1442,12 +1478,24 @@ export class AppComponent implements OnInit, OnDestroy {
     this.leadFilterSource = '';
     this.leadFilterOwner = '';
     this.leadFilterStageId = null;
-    this.rebuildLeadKanban();
+    this.leadFilterFollowUp = '';
+    this.leadFilterUnassigned = false;
+    this.leadFilterCourse = '';
+    this.searchLeads();
   }
 
   toggleStageFilter(stageId: number): void {
     this.leadFilterStageId = this.leadFilterStageId === stageId ? null : stageId;
-    this.rebuildLeadKanban();
+    this.searchLeads();
+  }
+
+  private leadAttributes(): Record<string, unknown> {
+    const attributes = mergeLeadProfile(null, this.leadForm.profile);
+    const course = (this.leadForm.course || '').trim();
+    if (course) {
+      attributes['course'] = course;
+    }
+    return attributes;
   }
 
   stageLeadCount(stageId: number): number {
@@ -1811,7 +1859,7 @@ export class AppComponent implements OnInit, OnDestroy {
       });
   }
 
-  openLead(lead: Lead): void {
+  openLead(lead: Lead, fromRoute = false): void {
     this.selectedLead = lead;
     this.selectedOpp = null;
     this.selectedQuote = null;
@@ -1837,6 +1885,11 @@ export class AppComponent implements OnInit, OnDestroy {
     this.loadTimeline(lead.id);
     this.loadLeadInsights();
     this.loadLeadHygiene(lead.id);
+    this.findDuplicates(true);
+    this.showOutcome = false;
+    if (!fromRoute) {
+      void this.router.navigate(['/leads', lead.id]);
+    }
     this.loadOfflineNote(lead.id);
     this.refreshFfVisitUrl(lead);
     if (!this.accounts.length) {
@@ -1919,6 +1972,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   closeLead(): void {
+    const wasOpen = this.selectedLead != null;
     this.selectedLead = null;
     this.editingLead = false;
     this.timeline = [];
@@ -1926,6 +1980,10 @@ export class AppComponent implements OnInit, OnDestroy {
     this.leadAttachments = [];
     this.showFfEmbed = false;
     this.offlineNote = '';
+    this.showOutcome = false;
+    if (wasOpen && this.router.url.startsWith('/leads/')) {
+      void this.router.navigate(['/leads']);
+    }
   }
 
   openOpp(opp: Opportunity): void {
@@ -2517,6 +2575,10 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!this.selectedLead) {
       return;
     }
+    if (this.convertTarget === 'SCHOOL_INQUIRY') {
+      this.error = 'School convert stays here until the admission service accepts the enquiry.';
+      return;
+    }
     this.busy = true;
     this.error = '';
     this.api.convertLead(this.selectedLead.id, this.convertTarget).subscribe({
@@ -2529,12 +2591,10 @@ export class AppComponent implements OnInit, OnDestroy {
         const errMsg = res['errorMessage'] ? String(res['errorMessage']) : '';
         if (status === 'FAILED') {
           this.error =
-            `Convert ${this.convertTarget} FAILED` +
-            (mode ? ` (${mode})` : '') +
-            (errMsg ? `: ${errMsg}` : '');
+            'Failed. Nothing was created in the other system.' + (errMsg ? ` ${errMsg}` : '');
           this.message = '';
         } else if (status === 'SKIPPED') {
-          this.message = `Convert stored only (crm.convert.enabled=false)`;
+          this.message = 'Skipped. The enquiry was kept here and was not sent.';
         } else if (status === 'ACKED' || res['alreadyConverted']) {
           this.message =
             `Already converted to ${this.convertTarget}` +
@@ -3262,20 +3322,107 @@ export class AppComponent implements OnInit, OnDestroy {
     });
   }
 
-  findDuplicates(): void {
+  courseOf(lead: Lead | null): string {
+    const value = lead?.attributes?.['course'];
+    return typeof value === 'string' ? value : '';
+  }
+
+  waDigits(phone: string | null | undefined): string {
+    const digits = (phone || '').replace(/\D/g, '');
+    if (digits.length === 10) {
+      return '91' + digits;
+    }
+    return digits;
+  }
+
+  leadChecked(id: number): boolean {
+    return this.selectedLeadIds.includes(id);
+  }
+
+  toggleLeadChecked(id: number, checked: boolean): void {
+    this.selectedLeadIds = checked
+      ? Array.from(new Set([...this.selectedLeadIds, id]))
+      : this.selectedLeadIds.filter((value) => value !== id);
+  }
+
+  bulkAssignSelected(): void {
+    if (!this.selectedLeadIds.length) {
+      this.error = 'Select at least one lead';
+      return;
+    }
+    this.busy = true;
+    this.api
+      .bulkAssignLeads({
+        leadIds: this.selectedLeadIds,
+        mode: this.bulkOwner ? 'MANUAL' : 'ROUND_ROBIN',
+        ownerUserId: this.bulkOwner || null,
+      })
+      .subscribe({
+        next: (res) => {
+          this.busy = false;
+          this.message = `Assigned ${res.assigned} lead${res.assigned === 1 ? '' : 's'}`;
+          this.selectedLeadIds = [];
+          this.loadLeads();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Bulk assign failed');
+        },
+      });
+  }
+
+  submitOutcome(): void {
+    if (!this.selectedLead) {
+      return;
+    }
+    this.busy = true;
+    this.api
+      .logOutcome(this.selectedLead.id, {
+        outcome: this.outcomeForm.outcome,
+        note: this.outcomeForm.note || undefined,
+        nextFollowUpDate: this.outcomeForm.nextFollowUpDate || null,
+        stageId: this.outcomeForm.stageId,
+      })
+      .subscribe({
+        next: (lead) => {
+          this.busy = false;
+          this.error = '';
+          this.message = 'Outcome saved';
+          this.showOutcome = false;
+          this.selectedLead = lead;
+          this.loadTimeline(lead.id);
+          this.loadLeads();
+        },
+        error: (err) => {
+          this.busy = false;
+          this.setError(err, 'Could not save the outcome');
+        },
+      });
+  }
+
+  findDuplicates(silent = false): void {
     if (!this.selectedLead) {
       return;
     }
     this.api.findDuplicates(this.selectedLead.id).subscribe({
       next: (rows) => {
         this.duplicateHits = rows || [];
+        if (silent) {
+          return;
+        }
         if (!this.duplicateHits.length) {
           this.message = 'No duplicates for enabled rules (phone/email/GSTIN)';
           return;
         }
         this.message = `Found ${this.duplicateHits.length} duplicate(s) — pick one to merge`;
       },
-      error: (err) => this.setError(err, 'Duplicate search failed'),
+      error: (err) => {
+        if (silent) {
+          this.duplicateHits = [];
+          return;
+        }
+        this.setError(err, 'Duplicate search failed');
+      },
     });
   }
 

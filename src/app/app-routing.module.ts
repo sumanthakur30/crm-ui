@@ -4,6 +4,7 @@ import { CrmModuleRouteComponent } from './core/crm-module-route.component';
 
 const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'home' },
+  { path: 'leads/:leadId', component: CrmModuleRouteComponent },
   { path: ':module', component: CrmModuleRouteComponent },
 ];
 

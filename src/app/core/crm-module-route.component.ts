@@ -15,6 +15,14 @@ export class CrmModuleRouteComponent implements OnInit {
 
   ngOnInit(): void {
     this.route.paramMap.subscribe((params) => {
+      const leadId = params.get('leadId');
+      if (leadId) {
+        this.nav.setModule('leads');
+        const id = Number(leadId);
+        this.nav.selectLead(Number.isFinite(id) ? id : null);
+        return;
+      }
+      this.nav.selectLead(null);
       const raw = params.get('module');
       if (CrmNavService.isModule(raw)) {
         this.nav.setModule(raw as CrmModuleId);

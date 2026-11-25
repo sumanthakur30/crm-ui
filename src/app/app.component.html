@@ -274,6 +274,21 @@
           <option *ngFor="let owner of leadOwnerOptions()" [value]="owner">{{ owner }}</option>
         </select>
       </label>
+      <label>Follow-up
+        <select [(ngModel)]="leadFilterFollowUp" name="fltFollow" (ngModelChange)="applyLeadFilters()">
+          <option value="">Any</option>
+          <option value="DUE_TODAY">Due today</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="NONE">None set</option>
+        </select>
+      </label>
+      <label>Course
+        <input [(ngModel)]="leadFilterCourse" name="fltCourse" (keyup.enter)="applyLeadFilters()" placeholder="Course" />
+      </label>
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="leadFilterUnassigned" name="fltUnassigned" (ngModelChange)="applyLeadFilters()" />
+        Unassigned only
+      </label>
       <button type="button" class="btn ghost" (click)="clearLeadFilters()">Clear</button>
     </div>
 
@@ -296,6 +311,7 @@
         <p class="section-label">Basic information</p>
         <label>Title * <input required [(ngModel)]="leadForm.title" name="title" placeholder="What they asked for" /></label>
         <label>Contact name <input [(ngModel)]="leadForm.displayName" name="displayName" placeholder="Person" /></label>
+        <label>Course <input [(ngModel)]="leadForm.course" name="course" placeholder="Class or course" /></label>
         <label>Company <input [(ngModel)]="leadForm.companyName" name="companyName" /></label>
         <div class="row wrap">
           <label>Phone <input [(ngModel)]="leadForm.phone" name="phone" /></label>
@@ -414,6 +430,12 @@
           </div>
         </div>
         <p class="hint">{{ visibleLeads().length }} on this page · {{ totalLeads }} leads</p>
+        <div class="row wrap" *ngIf="selectedLeadIds.length">
+          <input [(ngModel)]="bulkOwner" name="bulkOwner" placeholder="Owner user id, or blank for round-robin" />
+          <button type="button" class="btn primary" [disabled]="busy" (click)="bulkAssignSelected()">
+            Assign {{ selectedLeadIds.length }}
+          </button>
+        </div>
         <div class="row wrap">
           <button type="button" class="btn" (click)="prevLeadPage()" [disabled]="leadPage === 0 || busy">Previous</button>
           <span class="muted">Page {{ leadPage + 1 }} of {{ leadTotalPages }}</span>
@@ -459,31 +481,35 @@
           <table>
             <thead>
               <tr>
+                <th></th>
                 <th>Lead</th>
-                <th>Company</th>
                 <th>Phone</th>
+                <th>Course</th>
                 <th>Stage</th>
-                <th>Status</th>
                 <th>Owner</th>
+                <th>Next follow-up</th>
                 <th>Score</th>
               </tr>
             </thead>
             <tbody>
               <tr *ngFor="let lead of visibleLeads()" (click)="openLead(lead)" class="clickable">
+                <td (click)="$event.stopPropagation()">
+                  <input type="checkbox" [checked]="leadChecked(lead.id)" (change)="toggleLeadChecked(lead.id, $any($event.target).checked)" [attr.aria-label]="'Select ' + lead.title" />
+                </td>
                 <td>
                   <strong>{{ lead.title }}</strong>
                   <div class="muted">{{ lead.displayName || '—' }}</div>
                   <span class="badge warn" *ngIf="followUpOverdue(lead)">Follow-up overdue</span>
                 </td>
-                <td>{{ lead.companyName || '—' }}</td>
                 <td>{{ lead.phone || '—' }}</td>
+                <td>{{ courseOf(lead) || '—' }}</td>
                 <td>{{ stageName(lead.stageId) }}</td>
-                <td><span class="badge">{{ lead.status }}</span></td>
                 <td>{{ lead.ownerUserId || 'Unassigned' }}</td>
+                <td>{{ leadProfile(lead).nextFollowUpDate || '—' }}</td>
                 <td><span [class]="scoreBandClass(lead.scoreBand)">{{ lead.score }} — {{ lead.scoreBand || '—' }}</span></td>
               </tr>
               <tr *ngIf="!visibleLeads().length">
-                <td colspan="7" class="empty">No leads match these filters.</td>
+                <td colspan="8" class="empty">No leads match.</td>
               </tr>
             </tbody>
           </table>
@@ -1546,6 +1572,7 @@
 
   <div class="row wrap lead-actions">
     <button type="button" class="btn primary" (click)="openConvertWizard()">Convert to CRM</button>
+    <button type="button" class="btn primary" (click)="showOutcome = !showOutcome">Log outcome</button>
     <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Log call</button>
     <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Add note</button>
     <button type="button" class="btn" (click)="leadDrawerTab = 'activity'">Book meeting</button>
@@ -1567,12 +1594,56 @@
     <button type="button" class="btn" [class.primary]="leadDrawerTab === 'more'" (click)="leadDrawerTab = 'more'">More</button>
   </div>
 
+  <section class="panel" *ngIf="showOutcome">
+    <h3>Log outcome</h3>
+    <form class="form" (ngSubmit)="submitOutcome()">
+      <label>Outcome
+        <select [(ngModel)]="outcomeForm.outcome" name="outcomeCode" required>
+          <option value="CONNECTED">Connected</option>
+          <option value="NO_ANSWER">No answer</option>
+          <option value="BUSY">Busy</option>
+          <option value="SWITCHED_OFF">Switched off</option>
+          <option value="INVALID_NUMBER">Invalid number</option>
+          <option value="CALLBACK_REQUESTED">Callback requested</option>
+        </select>
+      </label>
+      <label>Note <textarea [(ngModel)]="outcomeForm.note" name="outcomeNote" rows="2"></textarea></label>
+      <label>Next follow-up
+        <input type="date" [(ngModel)]="outcomeForm.nextFollowUpDate" name="outcomeFollow" />
+      </label>
+      <label>Stage
+        <select [(ngModel)]="outcomeForm.stageId" name="outcomeStage">
+          <option [ngValue]="null">Keep current stage</option>
+          <option *ngFor="let s of stages" [ngValue]="s.id">{{ s.name }}</option>
+        </select>
+      </label>
+      <button type="submit" class="btn primary" [disabled]="busy">Save outcome</button>
+    </form>
+  </section>
+
+  <section class="panel" *ngIf="duplicateHits.length">
+    <h3>Possible duplicate</h3>
+    <ul class="member-list">
+      <li *ngFor="let d of duplicateHits">
+        <strong>#{{ d['id'] }}</strong>
+        <span class="muted">{{ d['title'] || d['displayName'] || '—' }} · {{ d['phone'] || d['email'] || '' }}</span>
+        <button type="button" class="btn" (click)="mergeDuplicateIntoSelected(+$any(d['id']))">Link as the same person</button>
+      </li>
+    </ul>
+  </section>
+
   <ng-container *ngIf="leadDrawerTab === 'overview'">
   <dl class="meta" *ngIf="!editingLead">
     <div><dt>Contact</dt><dd>{{ lead.displayName || '—' }}</dd></div>
     <div><dt>Company</dt><dd>{{ lead.companyName || '—' }}</dd></div>
     <div><dt>Account</dt><dd>{{ accountName(lead.accountId) }}</dd></div>
-    <div><dt>Phone</dt><dd>{{ lead.phone || '—' }}</dd></div>
+    <div><dt>Phone</dt><dd>
+      {{ lead.phone || '—' }}
+      <a *ngIf="lead.phone" [href]="'tel:' + lead.phone">Call</a>
+      <a *ngIf="waDigits(lead.phone)" [href]="'https://wa.me/' + waDigits(lead.phone)" target="_blank" rel="noopener">WhatsApp</a>
+    </dd></div>
+    <div><dt>Course</dt><dd>{{ courseOf(lead) || '—' }}</dd></div>
+    <div><dt>Next follow-up</dt><dd>{{ leadProfile(lead).nextFollowUpDate || '—' }}</dd></div>
     <div><dt>Email</dt><dd>{{ lead.email || '—' }}</dd></div>
     <div><dt>Owner</dt><dd>{{ lead.ownerUserId || 'Unassigned' }}</dd></div>
     <div><dt>Designation</dt><dd>{{ leadProfile(lead).designation || '—' }}</dd></div>
@@ -1844,7 +1915,7 @@
     </p>
     <select class="full" [(ngModel)]="convertTarget" name="convTarget">
       <option value="SHOP_CUSTOMER">Shop customer (user-service)</option>
-      <option value="SCHOOL_INQUIRY">School inquiry</option>
+      <option value="SCHOOL_INQUIRY">School inquiry (not sent yet)</option>
       <option value="FIELD_FORCE">Field Force</option>
     </select>
     <p class="hint" *ngIf="convertRef(convertTarget) as ref">
@@ -1853,9 +1924,10 @@
     <button type="button" class="btn primary" [disabled]="busy" (click)="convertSelectedLead()">
       {{ convertEnabled ? 'Convert to ERP' : 'Store convert payload' }}
     </button>
-    <p class="hint" *ngIf="!convertEnabled">This shop's plan does not include convert. Super Admin can turn on FEATURE_CRM_CONVERT. Until then the payload is stored as SKIPPED.</p>
+    <p class="hint" *ngIf="convertTarget === 'SCHOOL_INQUIRY'">School convert stays on this lead until the admission service accepts it. Skipped and failed are shown in words and are not an enrolment.</p>
+    <p class="hint" *ngIf="!convertEnabled">This shop's plan does not include convert. Super Admin can turn on FEATURE_CRM_CONVERT. Until then the attempt is skipped and kept here.</p>
     <p class="hint" *ngIf="lastConvert as c">
-      Last: {{ c['status'] }} · {{ c['mode'] || '—' }}
+      Last: {{ c['status'] === 'SKIPPED' ? 'Skipped. The enquiry was kept here and was not sent.' : c['status'] === 'FAILED' ? 'Failed. Nothing was created in the other system.' : c['status'] }} · {{ c['mode'] || '—' }}
       <span *ngIf="c['externalId']"> · {{ c['externalId'] }}</span>
       <span *ngIf="c['alreadyConverted']"> · already converted</span>
     </p>

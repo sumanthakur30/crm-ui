@@ -58,6 +58,8 @@ export interface Lead {
   contactId?: number | null;
   createdAt?: string;
   updatedAt?: string;
+  branchId?: number | null;
+  firstResponseAt?: string | null;
 }
 
 export interface CrmAccount {
