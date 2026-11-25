@@ -64,6 +64,14 @@
         <a routerLink="/insights" routerLinkActive="primary" class="btn" [class.primary]="module === 'insights'">Insights</a>
         <a routerLink="/accounts" routerLinkActive="primary" class="btn" [class.primary]="module === 'accounts'">Accounts</a>
         <a
+          routerLink="/consultancy"
+          routerLinkActive="primary"
+          class="btn"
+          [class.primary]="module === 'consultancy'"
+        >
+          Admissions
+        </a>
+        <a
           *ngIf="can('campaigns')"
           routerLink="/campaigns"
           routerLinkActive="primary"
@@ -241,6 +249,224 @@
         <li *ngIf="!myDayActivities.length" class="muted">No recent tasks/meetings/calls/notes in window.</li>
       </ul>
     </section>
+  </ng-container>
+
+  <!-- ========== ADMISSIONS ========== -->
+  <ng-container *ngIf="module === 'consultancy'">
+    <header class="page-head">
+      <div>
+        <h1>Admissions</h1>
+        <p class="muted">Partner institutions, applications, fees, commission, and consultant pay. Rates stay in this workspace.</p>
+      </div>
+      <button type="button" class="btn" (click)="loadConsultancy()">Refresh</button>
+    </header>
+    <section class="panel" *ngIf="consultancy && !consultancy.enabled">
+      <p>Bootstrap this workspace with the Admission consultancy template to open applications and the three ledgers. Leads, quotes, and deals stay as they are.</p>
+    </section>
+    <ng-container *ngIf="consultancy?.enabled">
+      <section class="panel" *ngIf="consultancy?.contribution as money">
+        <h2>Contribution</h2>
+        <dl class="meta">
+          <div><dt>Fee outstanding</dt><dd>{{ money.feeOutstanding | number: '1.2-2' }}</dd></div>
+          <div><dt>Commission outstanding</dt><dd>{{ money.commissionOutstanding | number: '1.2-2' }}</dd></div>
+          <div><dt>Consultant outstanding</dt><dd>{{ money.consultantOutstanding | number: '1.2-2' }}</dd></div>
+          <div><dt>Expenses</dt><dd>{{ money.expenses | number: '1.2-2' }}</dd></div>
+          <div><dt>Realized</dt><dd>{{ money.realizedContribution | number: '1.2-2' }}</dd></div>
+        </dl>
+        <p class="hint">Fee receipts are not income. Realized is commission received minus consultant payments minus expenses. Import batches recorded: {{ consultancy?.importBatches }}.</p>
+      </section>
+      <div class="grid-2">
+        <section class="panel">
+          <h2>Institution</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancyInstitution()">
+            <input [(ngModel)]="consultancyForms.institution.code" name="instCode" placeholder="Code" required />
+            <input [(ngModel)]="consultancyForms.institution.name" name="instName" placeholder="Name" required />
+            <button class="btn primary" type="submit" [disabled]="busy">Save</button>
+          </form>
+          <ul class="member-list">
+            <li *ngFor="let row of consultancy?.institutions"><strong>{{ row.code }}</strong> {{ row.name }}</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>Course</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancyCourse()">
+            <input [(ngModel)]="consultancyForms.course.code" name="courseCode" placeholder="Code" required />
+            <input [(ngModel)]="consultancyForms.course.name" name="courseName" placeholder="Name" required />
+            <button class="btn primary" type="submit" [disabled]="busy">Save</button>
+          </form>
+          <ul class="member-list">
+            <li *ngFor="let row of consultancy?.courses"><strong>{{ row.code }}</strong> {{ row.name }}</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>Session</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancySession()">
+            <input [(ngModel)]="consultancyForms.session.code" name="sessionCode" placeholder="Code" required />
+            <input [(ngModel)]="consultancyForms.session.name" name="sessionName" placeholder="Name" required />
+            <button class="btn primary" type="submit" [disabled]="busy">Save</button>
+          </form>
+          <ul class="member-list">
+            <li *ngFor="let row of consultancy?.sessions"><strong>{{ row.code }}</strong> {{ row.name }}</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>Consultant</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancyConsultant()">
+            <input [(ngModel)]="consultancyForms.consultant.code" name="conCode" placeholder="Code" required />
+            <input [(ngModel)]="consultancyForms.consultant.name" name="conName" placeholder="Name" required />
+            <input [(ngModel)]="consultancyForms.consultant.phone" name="conPhone" placeholder="Phone" />
+            <input [(ngModel)]="consultancyForms.consultant.city" name="conCity" placeholder="City" />
+            <button class="btn primary" type="submit" [disabled]="busy">Save</button>
+          </form>
+          <ul class="member-list">
+            <li *ngFor="let row of consultancy?.consultants"><strong>{{ row.code }}</strong> {{ row.name }} <span class="muted">{{ row.city }}</span></li>
+          </ul>
+        </section>
+      </div>
+      <section class="panel">
+        <h2>Course offer</h2>
+        <form class="row wrap" (ngSubmit)="saveConsultancyOffer()">
+          <select [(ngModel)]="consultancyForms.offer.institutionId" name="offerInst" required>
+            <option [ngValue]="null">Institution</option>
+            <option *ngFor="let row of consultancy?.institutions" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.offer.courseId" name="offerCourse" required>
+            <option [ngValue]="null">Course</option>
+            <option *ngFor="let row of consultancy?.courses" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.offer.sessionId" name="offerSession" required>
+            <option [ngValue]="null">Session</option>
+            <option *ngFor="let row of consultancy?.sessions" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <input type="number" [(ngModel)]="consultancyForms.offer.feeAmount" name="offerFee" placeholder="Fee" />
+          <button class="btn primary" type="submit" [disabled]="busy">Save offer</button>
+        </form>
+        <ul class="member-list">
+          <li *ngFor="let row of consultancy?.offers">
+            {{ consultancyName(consultancy?.institutions, row.institutionId) }} ·
+            {{ consultancyName(consultancy?.courses, row.courseId) }} ·
+            {{ consultancyName(consultancy?.sessions, row.sessionId) }} ·
+            {{ row.feeAmount | number: '1.2-2' }}
+          </li>
+        </ul>
+      </section>
+      <section class="panel">
+        <h2>Application</h2>
+        <form class="row wrap" (ngSubmit)="openConsultancyPlacement()">
+          <input type="number" [(ngModel)]="consultancyForms.placement.leadId" name="placeLead" placeholder="Lead id" required />
+          <select [(ngModel)]="consultancyForms.placement.institutionId" name="placeInst" required>
+            <option [ngValue]="null">Institution</option>
+            <option *ngFor="let row of consultancy?.institutions" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.placement.courseId" name="placeCourse" required>
+            <option [ngValue]="null">Course</option>
+            <option *ngFor="let row of consultancy?.courses" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.placement.sessionId" name="placeSession" required>
+            <option [ngValue]="null">Session</option>
+            <option *ngFor="let row of consultancy?.sessions" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.placement.consultantId" name="placeCon">
+            <option [ngValue]="null">Consultant</option>
+            <option *ngFor="let row of consultancy?.consultants" [ngValue]="row.id">{{ row.name }}</option>
+          </select>
+          <button class="btn primary" type="submit" [disabled]="busy">Open application</button>
+        </form>
+        <table>
+          <thead>
+            <tr><th>Application</th><th>Lead</th><th>Institution</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of consultancy?.placements">
+              <td>{{ row.applicationNo }}</td>
+              <td>#{{ row.leadId }}</td>
+              <td>{{ consultancyName(consultancy?.institutions, row.institutionId) }}</td>
+              <td>{{ row.status }}<span *ngIf="row.cancelReason"> · {{ row.cancelReason }}</span></td>
+              <td><button type="button" class="btn" (click)="consultancyForms.txn.placementId = row.id">Use</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <form class="row wrap" (ngSubmit)="confirmConsultancyPlacement()">
+          <input [(ngModel)]="consultancyForms.enrolmentNo" name="enrolNo" placeholder="Enrolment no" />
+          <button class="btn" type="submit" [disabled]="busy">Confirm selected</button>
+        </form>
+        <form class="row wrap" (ngSubmit)="cancelConsultancyPlacement()">
+          <input [(ngModel)]="consultancyForms.cancelReason" name="cancelReason" placeholder="Cancellation reason" required />
+          <button class="btn ghost" type="submit" [disabled]="busy">Cancel selected</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Ledger entry</h2>
+        <p class="hint">Student fee, institution commission, consultant payable, and expense stay on separate ledgers. A repeated reference is rejected.</p>
+        <form class="row wrap" (ngSubmit)="addConsultancyTxn()">
+          <select [(ngModel)]="consultancyForms.txn.placementId" name="txnPlace" required>
+            <option [ngValue]="null">Application</option>
+            <option *ngFor="let row of consultancy?.placements" [ngValue]="row.id">{{ row.applicationNo }}</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.txn.ledger" name="txnLedger">
+            <option value="STUDENT_FEE">Student fee</option>
+            <option value="INSTITUTION_COMMISSION">Institution commission</option>
+            <option value="CONSULTANT_PAYABLE">Consultant payable</option>
+            <option value="EXPENSE">Expense</option>
+          </select>
+          <select [(ngModel)]="consultancyForms.txn.txnKind" name="txnKind">
+            <option value="SCHEDULE">Schedule</option>
+            <option value="RECEIPT">Receipt</option>
+            <option value="REFUND">Refund</option>
+            <option value="EXPECTED">Expected</option>
+            <option value="PAYMENT">Payment</option>
+            <option value="ADJUSTMENT">Adjustment</option>
+          </select>
+          <input type="number" [(ngModel)]="consultancyForms.txn.amount" name="txnAmount" placeholder="Amount" required />
+          <input [(ngModel)]="consultancyForms.txn.referenceNo" name="txnRef" placeholder="Reference" />
+          <input [(ngModel)]="consultancyForms.txn.note" name="txnNote" placeholder="Note" />
+          <button class="btn primary" type="submit" [disabled]="busy">Save entry</button>
+        </form>
+      </section>
+      <div class="grid-2">
+        <section class="panel">
+          <h2>Agreement</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancyAgreement()">
+            <select [(ngModel)]="consultancyForms.agreement.party" name="agrParty">
+              <option value="INSTITUTION">Institution</option>
+              <option value="CONSULTANT">Consultant</option>
+            </select>
+            <select [(ngModel)]="consultancyForms.agreement.method" name="agrMethod">
+              <option value="PERCENT">Percent</option>
+              <option value="FIXED">Fixed</option>
+            </select>
+            <select [(ngModel)]="consultancyForms.agreement.baseKind" name="agrBase">
+              <option value="FEE">On fee</option>
+              <option value="FIXED">Fixed base</option>
+            </select>
+            <select [(ngModel)]="consultancyForms.agreement.triggerCode" name="agrTrigger">
+              <option value="ADMISSION">On admission</option>
+              <option value="FEE_RECEIVED">On fee received</option>
+              <option value="COMMISSION_RECEIVED">On commission received</option>
+            </select>
+            <input type="number" [(ngModel)]="consultancyForms.agreement.rate" name="agrRate" placeholder="Rate" required />
+            <input type="date" [(ngModel)]="consultancyForms.agreement.effectiveFrom" name="agrFrom" required />
+            <button class="btn primary" type="submit" [disabled]="busy">Save agreement</button>
+          </form>
+          <ul class="member-list">
+            <li *ngFor="let row of consultancy?.agreements">{{ row.party }} {{ row.method }} {{ row.rate }} · {{ row.triggerCode }}</li>
+          </ul>
+        </section>
+        <section class="panel">
+          <h2>Assignment rule</h2>
+          <form class="row wrap" (ngSubmit)="saveConsultancyRule()">
+            <input [(ngModel)]="consultancyForms.rule.sourceCode" name="ruleSource" placeholder="Source" />
+            <input [(ngModel)]="consultancyForms.rule.courseCode" name="ruleCourse" placeholder="Course code" />
+            <input [(ngModel)]="consultancyForms.rule.city" name="ruleCity" placeholder="City" />
+            <input [(ngModel)]="consultancyForms.rule.ownerUserId" name="ruleOwner" placeholder="Owner user id" required />
+            <button class="btn primary" type="submit" [disabled]="busy">Save rule</button>
+          </form>
+          <p class="hint" *ngIf="campaigns.length">QR source: encode the campaign public link. Keys:
+            <span *ngFor="let c of campaigns"> {{ c.code }}={{ c.publicKey }}</span>
+          </p>
+        </section>
+      </div>
+    </ng-container>
   </ng-container>
 
   <!-- ========== LEADS ========== -->
@@ -1809,12 +2035,14 @@
 
   <ng-container *ngIf="leadDrawerTab === 'overview'">
   <dl class="meta" *ngIf="!editingLead">
+    <div *ngIf="lead.enquiryNo"><dt>Enquiry</dt><dd>{{ lead.enquiryNo }}</dd></div>
     <div><dt>Contact</dt><dd>{{ lead.displayName || '—' }}</dd></div>
     <div><dt>Company</dt><dd>{{ lead.companyName || '—' }}</dd></div>
     <div><dt>Account</dt><dd>{{ accountName(lead.accountId) }}</dd></div>
     <div><dt>Phone</dt><dd>
       {{ lead.phone || '—' }}
       <a *ngIf="lead.phone" [href]="'tel:' + lead.phone">Call</a>
+      <button type="button" class="btn" (click)="openAdmissionsForLead(lead.id)">Admissions</button>
       <a *ngIf="waDigits(lead.phone)" [href]="'https://wa.me/' + waDigits(lead.phone)" target="_blank" rel="noopener">WhatsApp</a>
     </dd></div>
     <div><dt>Course</dt><dd>{{ courseOf(lead) || '—' }}</dd></div>

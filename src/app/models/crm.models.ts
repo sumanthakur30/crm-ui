@@ -60,6 +60,7 @@ export interface Lead {
   updatedAt?: string;
   branchId?: number | null;
   firstResponseAt?: string | null;
+  enquiryNo?: string | null;
 }
 
 export interface CrmAccount {
@@ -467,5 +468,80 @@ export interface FieldForceEmbedConfig {
   enabled: boolean;
   visitUrlTemplate: string;
   openInNewTab: boolean;
+}
+
+export interface ConsultancyNamed {
+  id: number;
+  code: string;
+  name: string;
+  active: boolean;
+}
+
+export interface ConsultancyConsultant {
+  id: number;
+  code: string;
+  name: string;
+  phone?: string | null;
+  city?: string | null;
+  active: boolean;
+}
+
+export interface ConsultancyOffer {
+  id: number;
+  institutionId: number;
+  courseId: number;
+  sessionId: number;
+  feeAmount: number;
+}
+
+export interface ConsultancyPlacement {
+  id: number;
+  applicationNo: string;
+  leadId: number;
+  institutionId: number;
+  courseId: number;
+  sessionId: number;
+  consultantId?: number | null;
+  status: string;
+  enrolmentNo?: string | null;
+  cancelReason?: string | null;
+}
+
+export interface ConsultancyAgreement {
+  id: number;
+  party: string;
+  method: string;
+  rate: number;
+  baseKind: string;
+  triggerCode: string;
+  institutionId?: number | null;
+  consultantId?: number | null;
+}
+
+export interface ConsultancySummary {
+  feePayable: number;
+  feeReceived: number;
+  feeOutstanding: number;
+  commissionExpected: number;
+  commissionReceived: number;
+  commissionOutstanding: number;
+  consultantEntitled: number;
+  consultantPaid: number;
+  consultantOutstanding: number;
+  expenses: number;
+  realizedContribution: number;
+}
+
+export interface ConsultancyDesk {
+  enabled: boolean;
+  institutions: ConsultancyNamed[];
+  courses: ConsultancyNamed[];
+  sessions: ConsultancyNamed[];
+  consultants: ConsultancyConsultant[];
+  offers: ConsultancyOffer[];
+  placements: ConsultancyPlacement[];
+  agreements: ConsultancyAgreement[];
+  contribution: ConsultancySummary;
+  importBatches: number;
 }
 

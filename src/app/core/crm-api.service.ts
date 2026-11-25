@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import {
   Campaign,
   CampaignUpsert,
+  ConsultancyDesk,
+  ConsultancySummary,
   CloseReason,
   CrmAccount,
   CrmAttachment,
@@ -856,6 +858,80 @@ export class CrmApiService {
 
   submitCaseCsat(id: number, body: { score: number; comment?: string }): Observable<CrmCase> {
     return this.http.post<CrmCase>(`${this.base}/cases/${id}/csat`, body);
+  }
+
+  consultancyDesk(): Observable<ConsultancyDesk> {
+    return this.http.get<ConsultancyDesk>(`${this.base}/consultancy`);
+  }
+
+  saveConsultancyInstitution(body: { code: string; name: string }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/institutions`, body);
+  }
+
+  saveConsultancyCourse(body: { code: string; name: string; category?: string }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/courses`, body);
+  }
+
+  saveConsultancySession(body: { code: string; name: string }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/sessions`, body);
+  }
+
+  saveConsultancyConsultant(body: { code: string; name: string; phone?: string; city?: string }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/consultants`, body);
+  }
+
+  saveConsultancyOffer(body: {
+    institutionId: number;
+    courseId: number;
+    sessionId: number;
+    feeAmount: number | null;
+  }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/offers`, body);
+  }
+
+  openConsultancyPlacement(body: {
+    leadId: number;
+    institutionId: number;
+    courseId: number;
+    sessionId: number;
+    consultantId?: number | null;
+  }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/placements`, body);
+  }
+
+  confirmConsultancyPlacement(id: number, enrolmentNo: string): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/placements/${id}/confirm`, { enrolmentNo });
+  }
+
+  cancelConsultancyPlacement(id: number, reason: string): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/placements/${id}/cancel`, { reason });
+  }
+
+  addConsultancyTxn(
+    id: number,
+    body: { ledger: string; txnKind: string; amount: number; referenceNo?: string; note?: string }
+  ): Observable<ConsultancySummary> {
+    return this.http.post<ConsultancySummary>(`${this.base}/consultancy/placements/${id}/transactions`, body);
+  }
+
+  saveConsultancyAgreement(body: {
+    party: string;
+    method: string;
+    rate: number;
+    baseKind: string;
+    triggerCode: string;
+    effectiveFrom: string;
+  }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/agreements`, body);
+  }
+
+  saveConsultancyRule(body: {
+    sourceCode?: string;
+    courseCode?: string;
+    city?: string;
+    ownerUserId: string;
+  }): Observable<unknown> {
+    return this.http.post(`${this.base}/consultancy/assignment-rules`, body);
   }
 
   clickToDial(body: {

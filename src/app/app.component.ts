@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { CrmApiService } from './core/crm-api.service';
 import {
   emptyLeadProfile,
@@ -18,6 +18,7 @@ import {
   CrmAccount,
   CrmAttachment,
   CrmCase,
+  ConsultancyDesk,
   CrmContact,
   CrmTag,
   EntitlementsSnapshot,
@@ -73,7 +74,7 @@ export class AppComponent implements OnInit, OnDestroy {
   inboundSigningEnabled = false;
   lastConvert: Record<string, unknown> | null = null;
   templateCode = 'RETAIL';
-  templates: string[] = ['GENERIC', 'EDUCATION', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
+  templates: string[] = ['GENERIC', 'EDUCATION', 'ADMISSION_CONSULTANCY', 'RETAIL', 'MEDICAL_DISTRIBUTOR'];
   searchQ = '';
   leadPage = 0;
   leadPageSize = 50;
@@ -86,6 +87,26 @@ export class AppComponent implements OnInit, OnDestroy {
   showLogin = false;
 
   workspace: Workspace | null = null;
+  consultancy: ConsultancyDesk | null = null;
+  consultancyForms = {
+    institution: { code: '', name: '' },
+    course: { code: '', name: '', category: '' },
+    session: { code: '', name: '' },
+    consultant: { code: '', name: '', phone: '', city: '' },
+    offer: { institutionId: null as number | null, courseId: null as number | null, sessionId: null as number | null, feeAmount: null as number | null },
+    placement: {
+      leadId: null as number | null,
+      institutionId: null as number | null,
+      courseId: null as number | null,
+      sessionId: null as number | null,
+      consultantId: null as number | null,
+    },
+    txn: { placementId: null as number | null, ledger: 'STUDENT_FEE', txnKind: 'RECEIPT', amount: null as number | null, referenceNo: '', note: '' },
+    agreement: { party: 'INSTITUTION', method: 'PERCENT', rate: null as number | null, baseKind: 'FEE', triggerCode: 'ADMISSION', effectiveFrom: '' },
+    rule: { sourceCode: '', courseCode: '', city: '', ownerUserId: '' },
+    enrolmentNo: '',
+    cancelReason: '',
+  };
   pipelines: Pipeline[] = [];
   stages: Stage[] = [];
   dealStages: Stage[] = [];
@@ -682,6 +703,9 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     } else if (m === 'leads') {
       this.loadLeads();
+    } else if (m === 'consultancy') {
+      this.loadConsultancy();
+      this.loadCampaigns();
     }
   }
 
@@ -4427,6 +4451,163 @@ export class AppComponent implements OnInit, OnDestroy {
     }
     this.noteDraft = this.offlineNote;
     this.addNote();
+  }
+
+  loadConsultancy(): void {
+    this.api.consultancyDesk().subscribe({
+      next: (desk) => {
+        this.consultancy = desk;
+      },
+      error: (err) => this.setError(err, 'Could not load admissions'),
+    });
+  }
+
+  openAdmissionsForLead(leadId: number): void {
+    this.consultancyForms.placement.leadId = leadId;
+    this.setModule('consultancy');
+  }
+
+  saveConsultancyInstitution(): void {
+    this.postConsultancy(
+      this.api.saveConsultancyInstitution(this.consultancyForms.institution),
+      'Institution saved'
+    );
+  }
+
+  saveConsultancyCourse(): void {
+    this.postConsultancy(this.api.saveConsultancyCourse(this.consultancyForms.course), 'Course saved');
+  }
+
+  saveConsultancySession(): void {
+    this.postConsultancy(this.api.saveConsultancySession(this.consultancyForms.session), 'Session saved');
+  }
+
+  saveConsultancyConsultant(): void {
+    this.postConsultancy(this.api.saveConsultancyConsultant(this.consultancyForms.consultant), 'Consultant saved');
+  }
+
+  saveConsultancyOffer(): void {
+    const form = this.consultancyForms.offer;
+    if (!form.institutionId || !form.courseId || !form.sessionId) {
+      this.error = 'Institution, course, and session are required';
+      return;
+    }
+    this.postConsultancy(
+      this.api.saveConsultancyOffer({
+        institutionId: form.institutionId,
+        courseId: form.courseId,
+        sessionId: form.sessionId,
+        feeAmount: form.feeAmount,
+      }),
+      'Offer saved'
+    );
+  }
+
+  openConsultancyPlacement(): void {
+    const form = this.consultancyForms.placement;
+    if (!form.leadId || !form.institutionId || !form.courseId || !form.sessionId) {
+      this.error = 'Lead, institution, course, and session are required';
+      return;
+    }
+    this.postConsultancy(
+      this.api.openConsultancyPlacement({
+        leadId: form.leadId,
+        institutionId: form.institutionId,
+        courseId: form.courseId,
+        sessionId: form.sessionId,
+        consultantId: form.consultantId,
+      }),
+      'Application opened'
+    );
+  }
+
+  confirmConsultancyPlacement(): void {
+    const id = this.consultancyForms.txn.placementId;
+    if (!id) {
+      this.error = 'Choose an application';
+      return;
+    }
+    this.postConsultancy(this.api.confirmConsultancyPlacement(id, this.consultancyForms.enrolmentNo), 'Application confirmed');
+  }
+
+  cancelConsultancyPlacement(): void {
+    const id = this.consultancyForms.txn.placementId;
+    if (!id || !this.consultancyForms.cancelReason.trim()) {
+      this.error = 'Choose an application and enter a cancellation reason';
+      return;
+    }
+    this.postConsultancy(
+      this.api.cancelConsultancyPlacement(id, this.consultancyForms.cancelReason.trim()),
+      'Application cancelled'
+    );
+  }
+
+  addConsultancyTxn(): void {
+    const form = this.consultancyForms.txn;
+    if (!form.placementId || form.amount == null) {
+      this.error = 'Application and amount are required';
+      return;
+    }
+    this.postConsultancy(
+      this.api.addConsultancyTxn(form.placementId, {
+        ledger: form.ledger,
+        txnKind: form.txnKind,
+        amount: form.amount,
+        referenceNo: form.referenceNo,
+        note: form.note,
+      }),
+      'Ledger entry saved'
+    );
+  }
+
+  saveConsultancyAgreement(): void {
+    const form = this.consultancyForms.agreement;
+    if (form.rate == null || !form.effectiveFrom) {
+      this.error = 'Rate and effective date are required';
+      return;
+    }
+    this.postConsultancy(
+      this.api.saveConsultancyAgreement({
+        party: form.party,
+        method: form.method,
+        rate: form.rate,
+        baseKind: form.baseKind,
+        triggerCode: form.triggerCode,
+        effectiveFrom: form.effectiveFrom,
+      }),
+      'Agreement saved'
+    );
+  }
+
+  saveConsultancyRule(): void {
+    if (!this.consultancyForms.rule.ownerUserId.trim()) {
+      this.error = 'An owner is required';
+      return;
+    }
+    this.postConsultancy(this.api.saveConsultancyRule(this.consultancyForms.rule), 'Assignment rule saved');
+  }
+
+  consultancyName(rows: { id: number; name: string }[] | undefined, id: number | null | undefined): string {
+    if (!rows || id == null) {
+      return '—';
+    }
+    return rows.find((row) => row.id === id)?.name || '#' + id;
+  }
+
+  private postConsultancy(call: Observable<unknown>, done: string): void {
+    this.busy = true;
+    this.error = '';
+    call.subscribe({
+      next: () => {
+        this.busy = false;
+        this.message = done;
+        this.loadConsultancy();
+      },
+      error: (err: unknown) => {
+        this.busy = false;
+        this.setError(err, done + ' failed');
+      },
+    });
   }
 
   private setError(err: unknown, fallback: string): void {
